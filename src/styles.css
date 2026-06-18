@@ -1,0 +1,306 @@
+:root {
+  color-scheme: dark;
+  color: #111827;
+  background: #f7f7fb;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: radial-gradient(circle at top left, #eef2ff 0%, #f8fafc 45%, #f7f7fb 100%);
+}
+
+.page-shell {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 20px 40px;
+}
+
+.top-nav {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 20px 0;
+  border-bottom: 1px solid #e5e7eb;
+  margin-bottom: 20px;
+}
+
+.nav-button {
+  padding: 8px 16px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  background: transparent;
+  cursor: pointer;
+  font-size: 0.95rem;
+  white-space: nowrap;
+  transition: all 0.2s;
+}
+
+.nav-button:hover {
+  background: #f3f4f6;
+}
+
+.nav-button.active {
+  background: #1f2937;
+  color: #f8fafc;
+  border-color: #1f2937;
+}
+
+.hero-panel {
+  background: #1f2937;
+  color: #f8fafc;
+  padding: 28px;
+  border-radius: 24px;
+  margin-bottom: 28px;
+}
+
+.eyebrow {
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  font-size: 0.76rem;
+  opacity: 0.8;
+  margin: 0 0 12px;
+}
+
+.hero-panel h1 {
+  margin: 0;
+  font-size: clamp(2rem, 4vw, 3.2rem);
+  line-height: 1.05;
+}
+
+.hero-panel p {
+  margin: 16px 0 0;
+  max-width: 680px;
+  font-size: 1rem;
+}
+
+.layout-grid {
+  display: grid;
+  gap: 24px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.layout-single {
+  display: grid;
+  gap: 24px;
+  grid-template-columns: 1fr;
+}
+
+.panel {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 24px;
+  padding: 24px;
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.05);
+}
+
+.panel h2 {
+  margin-top: 0;
+  font-size: 1.2rem;
+}
+
+.panel h3 {
+  font-size: 1rem;
+  margin: 16px 0 12px;
+}
+
+.form-grid {
+  display: grid;
+  gap: 18px;
+}
+
+label {
+  display: grid;
+  gap: 8px;
+  font-size: 0.95rem;
+}
+
+input,
+select,
+textarea {
+  border: 1px solid #d1d5db;
+  border-radius: 14px;
+  padding: 12px 14px;
+  font-size: 1rem;
+  width: 100%;
+  font-family: inherit;
+}
+
+textarea {
+  min-height: 80px;
+  resize: vertical;
+}
+
+button {
+  background: #1f2937;
+  color: #f8fafc;
+  border: none;
+  border-radius: 14px;
+  padding: 12px 16px;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+button:hover {
+  background: #374151;
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.results-card {
+  margin-top: 24px;
+  padding: 20px;
+  border-radius: 20px;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+}
+
+.results-card p {
+  margin: 0 0 12px;
+  line-height: 1.6;
+}
+
+.good-deal {
+  color: #047857;
+  font-weight: 600;
+}
+
+.bad-deal {
+  color: #b91c1c;
+  font-weight: 600;
+}
+
+.market-list,
+.comp-list,
+.rehab-list,
+.seller-list,
+.buyer-list,
+.property-list {
+  display: grid;
+  gap: 16px;
+}
+
+.market-card,
+.comp-card,
+.rehab-card,
+.seller-card,
+.buyer-card,
+.property-card {
+  padding: 18px;
+  border-radius: 18px;
+  background: #f8fafc;
+  border: 1px solid #e5e7eb;
+}
+
+.comp-address,
+.property-card h4 {
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.market-heat-card {
+  border-left: 4px solid #dc2626;
+  padding: 18px;
+  border-radius: 12px;
+  background: #f8fafc;
+  border-top: 1px solid #e5e7eb;
+  border-bottom: 1px solid #e5e7eb;
+  border-right: 1px solid #e5e7eb;
+}
+
+.heat-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.heat-header h3 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.heat-score {
+  padding: 6px 12px;
+  border-radius: 8px;
+  color: #ffffff;
+  font-weight: 700;
+  font-size: 0.9rem;
+  min-width: 50px;
+  text-align: center;
+}
+
+.market-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+}
+
+.seller-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.status-badge {
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid #d1d5db;
+  font-size: 0.85rem;
+}
+
+.status-badge.new {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.status-badge.contacted {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.status-badge.negotiating {
+  background: #f3e8ff;
+  color: #6b21a8;
+}
+
+.status-badge.deal {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.status-badge.lost {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.text-muted {
+  color: #6b7280;
+  font-size: 0.9rem;
+}
+
+.reference-section {
+  margin-top: 16px;
+}
+
+@media (max-width: 960px) {
+  .layout-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .market-grid {
+    grid-template-columns: 1fr;
+  }
+}

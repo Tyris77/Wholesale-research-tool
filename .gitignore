@@ -1,0 +1,12 @@
+node_modules/
+dist/
+build/
+.env
+.env.local
+.DS_Store
+*.log
+*.db
+.vscode/settings.json
+backend/node_modules/
+backend/wholesale.db
+backend/.env
