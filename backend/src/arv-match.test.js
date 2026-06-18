@@ -36,3 +36,24 @@ test('GET /api/deals/:id/matches returns matches for a saved deal', async () => 
   assert.ok(res.body.matches[0].score > 0);
   await request(app).delete(`/api/deals/${created.body.id}`);
 });
+
+test('deal_type persists and drives buyer matching end-to-end', async () => {
+  const buyer = await request(app).post('/api/buyers').send({
+    name: 'Flip Buyer', preferred_areas: 'Atlanta', cash_available: 500000, deal_types: 'flip',
+  });
+  const created = await request(app).post('/api/deals').send({
+    name: 'Flip Deal', city: 'Atlanta', state: 'GA', deal_type: 'flip',
+    purchase_price: 120000, repair_budget: 0, arv: 200000, selling_costs: 0, holding_costs: 0, wholesale_fee: 0,
+  });
+  assert.equal(created.body.deal_type, 'flip');
+
+  const stored = await request(app).get(`/api/deals/${created.body.id}`);
+  assert.equal(stored.body.deal_type, 'flip');
+
+  const res = await request(app).get(`/api/deals/${created.body.id}/matches`);
+  const match = res.body.matches.find((m) => m.buyer.id === buyer.body.id);
+  assert.ok(match, 'flip buyer should appear in matches');
+  assert.ok(match.reasons.some((r) => /flip/i.test(r)), 'a reason should cite the deal type');
+
+  await request(app).delete(`/api/deals/${created.body.id}`);
+});

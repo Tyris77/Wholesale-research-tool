@@ -49,6 +49,7 @@ export function DealSheet() {
         {(deal.property_address || deal.city) && (
           <p>{[deal.property_address, deal.city, deal.state].filter(Boolean).join(', ')}</p>
         )}
+        {deal.deal_type && <p className="text-muted">{deal.deal_type.replace('_', ' ')} · {deal.status}</p>}
       </header>
 
       <section className="panel">

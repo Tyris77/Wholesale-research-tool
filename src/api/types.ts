@@ -128,6 +128,7 @@ export interface DealInputFields {
   selling_costs: number;
   holding_costs: number;
   wholesale_fee: number;
+  deal_type?: string;
   status?: string;
 }
 

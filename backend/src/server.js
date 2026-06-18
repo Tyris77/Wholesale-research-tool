@@ -249,12 +249,13 @@ app.post('/api/deals', validateBody(dealCreateSchema), asyncHandler(async (req, 
     id, name: b.name, property_address: b.property_address || '', city: b.city || '', state: b.state || '',
     purchase_price: b.purchase_price, repair_budget: b.repair_budget, arv: b.arv,
     selling_costs: b.selling_costs, holding_costs: b.holding_costs, wholesale_fee: b.wholesale_fee,
+    deal_type: b.deal_type || 'wholesale',
     profit, roi, status: b.status || 'analyzing', created_at: now, updated_at: now,
   };
   await dbRun(
-    `INSERT INTO deals (id, name, property_address, city, state, purchase_price, repair_budget, arv, selling_costs, holding_costs, wholesale_fee, profit, roi, status, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [deal.id, deal.name, deal.property_address, deal.city, deal.state, deal.purchase_price, deal.repair_budget, deal.arv, deal.selling_costs, deal.holding_costs, deal.wholesale_fee, deal.profit, deal.roi, deal.status, deal.created_at, deal.updated_at],
+    `INSERT INTO deals (id, name, property_address, city, state, purchase_price, repair_budget, arv, selling_costs, holding_costs, wholesale_fee, deal_type, profit, roi, status, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [deal.id, deal.name, deal.property_address, deal.city, deal.state, deal.purchase_price, deal.repair_budget, deal.arv, deal.selling_costs, deal.holding_costs, deal.wholesale_fee, deal.deal_type, deal.profit, deal.roi, deal.status, deal.created_at, deal.updated_at],
   );
   res.json(deal);
 }));
@@ -264,8 +265,8 @@ app.put('/api/deals/:id', validateBody(dealUpdateSchema), asyncHandler(async (re
   const { profit, roi } = computeDeal(b);
   const now = new Date().toISOString();
   await dbRun(
-    `UPDATE deals SET name = ?, property_address = ?, city = ?, state = ?, purchase_price = ?, repair_budget = ?, arv = ?, selling_costs = ?, holding_costs = ?, wholesale_fee = ?, profit = ?, roi = ?, status = ?, updated_at = ? WHERE id = ?`,
-    [b.name, b.property_address || '', b.city || '', b.state || '', b.purchase_price, b.repair_budget, b.arv, b.selling_costs, b.holding_costs, b.wholesale_fee, profit, roi, b.status || 'analyzing', now, req.params.id],
+    `UPDATE deals SET name = ?, property_address = ?, city = ?, state = ?, purchase_price = ?, repair_budget = ?, arv = ?, selling_costs = ?, holding_costs = ?, wholesale_fee = ?, deal_type = ?, profit = ?, roi = ?, status = ?, updated_at = ? WHERE id = ?`,
+    [b.name, b.property_address || '', b.city || '', b.state || '', b.purchase_price, b.repair_budget, b.arv, b.selling_costs, b.holding_costs, b.wholesale_fee, b.deal_type || 'wholesale', profit, roi, b.status || 'analyzing', now, req.params.id],
   );
   res.json({ success: true, profit, roi });
 }));

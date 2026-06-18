@@ -121,6 +121,7 @@ export function initDb() {
         selling_costs REAL,
         holding_costs REAL,
         wholesale_fee REAL,
+        deal_type TEXT,
         profit REAL,
         roi REAL,
         status TEXT,
@@ -128,6 +129,9 @@ export function initDb() {
         updated_at TEXT
       )
     `);
+    // Migrate deals tables created before deal_type existed. The error callback
+    // swallows the "duplicate column name" error on DBs that already have it.
+    db.run('ALTER TABLE deals ADD COLUMN deal_type TEXT', () => {});
   });
 }
 

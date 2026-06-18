@@ -72,6 +72,7 @@ export const dealCreateSchema = z.object({
   selling_costs: money,
   holding_costs: money,
   wholesale_fee: money,
+  deal_type: z.enum(['wholesale', 'flip', 'buy_hold']).optional(),
   status: z.string().optional(),
 });
 

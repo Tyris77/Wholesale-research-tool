@@ -37,6 +37,10 @@ export function matchBuyers(deal, buyers) {
         score += 1;
         reasons.push('Matches typical deal size');
       }
+      if (deal.deal_type && (buyer.deal_types || '').toLowerCase().includes(deal.deal_type.toLowerCase())) {
+        score += 1;
+        reasons.push(`Wants ${deal.deal_type.replace('_', ' ')} deals`);
+      }
       return { buyer, score, reasons };
     })
     .filter((m) => m.score > 0)

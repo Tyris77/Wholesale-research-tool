@@ -70,6 +70,7 @@ export function Deals() {
                 {(deal.city || deal.property_address) && (
                   <p className="text-muted">📍 {[deal.property_address, deal.city, deal.state].filter(Boolean).join(', ')}</p>
                 )}
+                {deal.deal_type && <p className="text-muted">🏷️ {deal.deal_type.replace('_', ' ')}</p>}
                 <div className="kpi-grid">
                   <div className="kpi"><p className="kpi-label">Profit</p><p className="kpi-value">{formatCurrency(deal.profit)}</p></div>
                   <div className="kpi"><p className="kpi-label">ROI</p><p className="kpi-value">{deal.roi.toFixed(1)}%</p></div>

@@ -29,7 +29,7 @@ export function Calculator() {
   const results = useMemo(() => calculateWholesaleDeal(inputs), [inputs]);
   const spread = inputs.arv - inputs.repairBudget - inputs.sellingCosts - inputs.wholesaleFee;
 
-  const [meta, setMeta] = useState({ name: '', address: '', city: '', state: '', sqft: 1800 });
+  const [meta, setMeta] = useState({ name: '', address: '', city: '', state: '', sqft: 1800, dealType: 'wholesale' });
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [arvMsg, setArvMsg] = useState<string | null>(null);
@@ -41,6 +41,7 @@ export function Calculator() {
       name: meta.name, property_address: meta.address, city: meta.city, state: meta.state,
       purchase_price: inputs.purchasePrice, repair_budget: inputs.repairBudget, arv: inputs.arv,
       selling_costs: inputs.sellingCosts, holding_costs: inputs.holdingCosts, wholesale_fee: inputs.wholesaleFee,
+      deal_type: meta.dealType,
     };
     try {
       const deal = await createDeal(body);
@@ -120,6 +121,14 @@ export function Calculator() {
           <div className="form-grid">
             <input placeholder="Deal name" value={meta.name} onChange={(e) => setMeta({ ...meta, name: e.target.value })} />
             <input placeholder="Property address" value={meta.address} onChange={(e) => setMeta({ ...meta, address: e.target.value })} />
+            <label>
+              <span>Deal type</span>
+              <select value={meta.dealType} onChange={(e) => setMeta({ ...meta, dealType: e.target.value })}>
+                <option value="wholesale">Wholesale</option>
+                <option value="flip">Flip</option>
+                <option value="buy_hold">Buy &amp; hold</option>
+              </select>
+            </label>
             <button onClick={handleSave} disabled={!meta.name}>Save deal</button>
           </div>
           {saveMsg && <p className="good-deal" style={{ marginTop: 12 }}>{saveMsg}</p>}
