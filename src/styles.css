@@ -297,3 +297,13 @@ button:disabled { opacity: 0.6; cursor: not-allowed; }
   .layout-grid { grid-template-columns: 1fr; }
   .market-grid { grid-template-columns: 1fr; }
 }
+
+/* ---------- Print (deal sheet) ---------- */
+.deal-sheet { max-width: 800px; }
+@media print {
+  .sidebar, .no-print { display: none !important; }
+  .app-shell { display: block; }
+  .app-main { padding: 0; max-width: none; }
+  .panel, .hero-panel { box-shadow: none; break-inside: avoid; }
+  body { background: #fff; }
+}
