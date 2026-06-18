@@ -29,14 +29,14 @@ app.get('/api/health', (req, res) => {
 // Markets endpoints
 app.get('/api/markets', (req, res) => {
   db.all('SELECT * FROM markets ORDER BY heat_score DESC', (err, rows) => {
-    if (err) return res.status(500).json({ error: err.message });
+    if (err) return res.status(500).json({ success: false, error: err.message });
     res.json(rows || []);
   });
 });
 
 app.get('/api/markets/:id', (req, res) => {
   db.get('SELECT * FROM markets WHERE id = ?', [req.params.id], (err, row) => {
-    if (err) return res.status(500).json({ error: err.message });
+    if (err) return res.status(500).json({ success: false, error: err.message });
     res.json(row);
   });
 });
@@ -58,14 +58,14 @@ app.get('/api/comps', (req, res) => {
   query += ' ORDER BY sold_date DESC LIMIT 20';
   
   db.all(query, params, (err, rows) => {
-    if (err) return res.status(500).json({ error: err.message });
+    if (err) return res.status(500).json({ success: false, error: err.message });
     res.json(rows || []);
   });
 });
 
 app.get('/api/comps/:id', (req, res) => {
   db.get('SELECT * FROM comps WHERE id = ?', [req.params.id], (err, row) => {
-    if (err) return res.status(500).json({ error: err.message });
+    if (err) return res.status(500).json({ success: false, error: err.message });
     res.json(row);
   });
 });
@@ -73,7 +73,7 @@ app.get('/api/comps/:id', (req, res) => {
 // Sellers endpoints
 app.get('/api/sellers', (req, res) => {
   db.all('SELECT * FROM sellers ORDER BY created_at DESC', (err, rows) => {
-    if (err) return res.status(500).json({ error: err.message });
+    if (err) return res.status(500).json({ success: false, error: err.message });
     res.json(rows || []);
   });
 });
@@ -88,7 +88,7 @@ app.post('/api/sellers', validateBody(sellerCreateSchema), (req, res) => {
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [id, name, phone, email, property_address, property_city, property_state, motivation, 'new', created_at],
     function(err) {
-      if (err) return res.status(500).json({ error: err.message });
+      if (err) return res.status(500).json({ success: false, error: err.message });
       res.json({ id, name, phone, email, property_address, property_city, property_state, motivation, status: 'new', created_at });
     }
   );
@@ -102,7 +102,7 @@ app.put('/api/sellers/:id', validateBody(sellerUpdateSchema), (req, res) => {
     `UPDATE sellers SET name = ?, phone = ?, email = ?, status = ?, motivation = ?, last_contacted = ? WHERE id = ?`,
     [name, phone, email, status, motivation, last_contacted, req.params.id],
     function(err) {
-      if (err) return res.status(500).json({ error: err.message });
+      if (err) return res.status(500).json({ success: false, error: err.message });
       res.json({ success: true });
     }
   );
@@ -111,7 +111,7 @@ app.put('/api/sellers/:id', validateBody(sellerUpdateSchema), (req, res) => {
 // Buyers endpoints
 app.get('/api/buyers', (req, res) => {
   db.all('SELECT * FROM buyers ORDER BY created_at DESC', (err, rows) => {
-    if (err) return res.status(500).json({ error: err.message });
+    if (err) return res.status(500).json({ success: false, error: err.message });
     res.json(rows || []);
   });
 });
@@ -126,7 +126,7 @@ app.post('/api/buyers', validateBody(buyerCreateSchema), (req, res) => {
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [id, name, phone, email, cash_available, deal_types, preferred_areas, avg_deal_size, 'active', created_at],
     function(err) {
-      if (err) return res.status(500).json({ error: err.message });
+      if (err) return res.status(500).json({ success: false, error: err.message });
       res.json({ id, name, phone, email, cash_available, deal_types, preferred_areas, avg_deal_size, status: 'active', created_at });
     }
   );
@@ -140,7 +140,7 @@ app.put('/api/buyers/:id', validateBody(buyerUpdateSchema), (req, res) => {
     `UPDATE buyers SET name = ?, phone = ?, email = ?, cash_available = ?, deal_types = ?, preferred_areas = ?, status = ?, last_contacted = ? WHERE id = ?`,
     [name, phone, email, cash_available, deal_types, preferred_areas, status, last_contacted, req.params.id],
     function(err) {
-      if (err) return res.status(500).json({ error: err.message });
+      if (err) return res.status(500).json({ success: false, error: err.message });
       res.json({ success: true });
     }
   );
@@ -171,7 +171,7 @@ app.get('/api/properties/search', (req, res) => {
   query += ' LIMIT 50';
   
   db.all(query, params, (err, rows) => {
-    if (err) return res.status(500).json({ error: err.message });
+    if (err) return res.status(500).json({ success: false, error: err.message });
     res.json(rows || []);
   });
 });
