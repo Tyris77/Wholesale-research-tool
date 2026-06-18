@@ -1,7 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import { pathToFileURL } from 'url';
-import { config } from './config.js';
+import { config, integrationStatus } from './config.js';
 import { initDb, db } from './db.js';
 import { v4 as uuid } from 'uuid';
 import { analyzeDealWithAI, scoreSeller } from './ai-service.js';
@@ -12,6 +12,10 @@ app.use(cors({ origin: config.corsOrigin }));
 app.use(express.json());
 
 initDb();
+
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok', integrations: integrationStatus() });
+});
 
 // Markets endpoints
 app.get('/api/markets', (req, res) => {
