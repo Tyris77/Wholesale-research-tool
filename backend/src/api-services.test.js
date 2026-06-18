@@ -64,3 +64,19 @@ test('getLiveComps returns error when no api key', async () => {
   assert.equal(result.success, false);
   assert.match(result.error, /RENTCAST_API_KEY/);
 });
+
+import { geocodeAddress } from './api-services.js';
+
+test('geocodeAddress sends a User-Agent and returns coordinates', async () => {
+  const captured = {};
+  const body = [{ display_name: '4812 Maple St, Atlanta, GA', lat: '33.7', lon: '-84.4', boundingbox: ['1','2','3','4'] }];
+  const fetchFn = async (url, opts) => {
+    captured.opts = opts;
+    return { ok: true, status: 200, json: async () => body };
+  };
+  const result = await geocodeAddress('4812 Maple St, Atlanta, GA', { fetchFn });
+
+  assert.equal(result.success, true);
+  assert.equal(result.latitude, '33.7');
+  assert.ok(captured.opts.headers['User-Agent'], 'User-Agent header must be set');
+});

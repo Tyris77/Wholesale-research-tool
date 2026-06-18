@@ -67,17 +67,16 @@ export async function getNeighborhoodDemographics(zipCode) {
   }
 }
 
-// Nominatim (OpenStreetMap) - Free Geocoding
-export async function geocodeAddress(address) {
+// Nominatim (OpenStreetMap) - Free Geocoding (requires a User-Agent per usage policy)
+export async function geocodeAddress(address, { fetchFn = fetch } = {}) {
   try {
-    const response = await fetch(
-      `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(address)}&format=json&limit=1`
-    );
-
+    const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(address)}&format=json&limit=1`;
+    const response = await fetchFn(url, {
+      headers: { 'User-Agent': 'WholesaleResearchTool/1.0 (https://github.com/local/wholesale-research-tool)' },
+    });
     if (!response.ok) throw new Error(`Geocoding error: ${response.status}`);
 
     const data = await response.json();
-
     if (data.length > 0) {
       const result = data[0];
       return {
@@ -88,7 +87,6 @@ export async function geocodeAddress(address) {
         boundingBox: result.boundingbox,
       };
     }
-
     return { error: 'Address not found' };
   } catch (error) {
     console.error('Geocoding error:', error.message);
