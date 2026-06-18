@@ -2,6 +2,7 @@ import type {
   Market, Comp, Seller, NewSeller, Buyer, NewBuyer,
   DealInputs, DealAnalysisResult, SellerScoreInput, SellerScoreResult,
   MarketTrend, Neighborhood, GeocodeResult, Health,
+  DealInputFields, Deal, ArvEstimate, DealMatches,
 } from './types';
 
 const DEFAULT_BASE_URL = (import.meta.env.VITE_API_URL as string | undefined) ?? 'http://localhost:5000';
@@ -67,3 +68,20 @@ export const geocode = (address: string, city: string, state: string) => {
   const params = new URLSearchParams({ address, city, state });
   return apiFetch<GeocodeResult>(`/api/geocode?${params.toString()}`);
 };
+
+export const getDeals = () => apiFetch<Deal[]>('/api/deals');
+export const getDeal = (id: string) => apiFetch<Deal>(`/api/deals/${id}`);
+export const createDeal = (body: DealInputFields) => apiFetch<Deal>('/api/deals', jsonBody(body));
+export const updateDeal = (id: string, body: DealInputFields) =>
+  apiFetch<{ success: boolean; profit: number; roi: number }>(`/api/deals/${id}`, { method: 'PUT', body: JSON.stringify(body) });
+export const deleteDeal = (id: string) => apiFetch<{ success: boolean }>(`/api/deals/${id}`, { method: 'DELETE' });
+
+export const estimateArv = (city: string, state: string, sqft: number) => {
+  const params = new URLSearchParams();
+  if (city) params.append('city', city);
+  if (state) params.append('state', state);
+  params.append('sqft', String(sqft));
+  return apiFetch<ArvEstimate>(`/api/arv?${params.toString()}`);
+};
+
+export const getDealMatches = (id: string) => apiFetch<DealMatches>(`/api/deals/${id}/matches`);

@@ -116,3 +116,44 @@ export interface Health {
   status: string;
   integrations: { groq: boolean; fred: boolean; census: boolean; rentcast: boolean };
 }
+
+export interface DealInputFields {
+  name: string;
+  property_address?: string;
+  city?: string;
+  state?: string;
+  purchase_price: number;
+  repair_budget: number;
+  arv: number;
+  selling_costs: number;
+  holding_costs: number;
+  wholesale_fee: number;
+  status?: string;
+}
+
+export interface Deal extends DealInputFields {
+  id: string;
+  profit: number;
+  roi: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ArvEstimate {
+  success: boolean;
+  estimatedArv?: number;
+  medianPricePerSqft?: number;
+  compCount?: number;
+  error?: string;
+}
+
+export interface BuyerMatch {
+  buyer: Buyer;
+  score: number;
+  reasons: string[];
+}
+
+export interface DealMatches {
+  success: boolean;
+  matches: BuyerMatch[];
+}
