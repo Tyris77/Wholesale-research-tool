@@ -13,7 +13,7 @@ const FRED_NATIONAL_SERIES = 'USSTHPI';
 
 export async function getMarketTrends(metroArea = 'Atlanta', { apiKey = process.env.FRED_API_KEY, fetchFn = fetch } = {}) {
   try {
-    if (!apiKey) return { error: 'FRED API key not configured' };
+    if (!apiKey) return { success: false, error: 'FRED API key not configured' };
 
     const seriesId = FRED_SERIES_BY_METRO[metroArea] || FRED_NATIONAL_SERIES;
     const url = `https://api.stlouisfed.org/fred/series/observations?series_id=${seriesId}`
@@ -32,7 +32,7 @@ export async function getMarketTrends(metroArea = 'Atlanta', { apiKey = process.
     };
   } catch (error) {
     console.error('FRED API error:', error.message);
-    return { error: error.message };
+    return { success: false, error: error.message };
   }
 }
 
