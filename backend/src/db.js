@@ -106,6 +106,28 @@ export function initDb() {
     `, () => {
       seedData();
     });
+
+    // Deals table
+    db.run(`
+      CREATE TABLE IF NOT EXISTS deals (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        property_address TEXT,
+        city TEXT,
+        state TEXT,
+        purchase_price REAL,
+        repair_budget REAL,
+        arv REAL,
+        selling_costs REAL,
+        holding_costs REAL,
+        wholesale_fee REAL,
+        profit REAL,
+        roi REAL,
+        status TEXT,
+        created_at TEXT,
+        updated_at TEXT
+      )
+    `);
   });
 }
 
@@ -147,4 +169,14 @@ function seedData() {
 
     console.log('Database initialized with seed data');
   });
+}
+
+export function dbAll(sql, params = []) {
+  return new Promise((resolve, reject) => db.all(sql, params, (err, rows) => (err ? reject(err) : resolve(rows || []))));
+}
+export function dbGet(sql, params = []) {
+  return new Promise((resolve, reject) => db.get(sql, params, (err, row) => (err ? reject(err) : resolve(row))));
+}
+export function dbRun(sql, params = []) {
+  return new Promise((resolve, reject) => db.run(sql, params, function (err) { return err ? reject(err) : resolve(this); }));
 }
