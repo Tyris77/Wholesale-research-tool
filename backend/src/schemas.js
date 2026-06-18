@@ -1,0 +1,62 @@
+import { z } from 'zod';
+
+// Email is optional but, when present, must be valid. Empty string is allowed
+// because HTML forms submit "" for untouched fields.
+const optionalEmail = z.string().email().optional().or(z.literal(''));
+const money = z.number().nonnegative();
+
+export const sellerCreateSchema = z.object({
+  name: z.string().min(1),
+  phone: z.string().optional(),
+  email: optionalEmail,
+  property_address: z.string().optional(),
+  property_city: z.string().optional(),
+  property_state: z.string().optional(),
+  motivation: z.string().optional(),
+});
+
+export const sellerUpdateSchema = z.object({
+  name: z.string().min(1),
+  phone: z.string().optional(),
+  email: optionalEmail,
+  status: z.string().min(1),
+  motivation: z.string().optional(),
+});
+
+export const buyerCreateSchema = z.object({
+  name: z.string().min(1),
+  phone: z.string().optional(),
+  email: optionalEmail,
+  cash_available: money.optional(),
+  deal_types: z.string().optional(),
+  preferred_areas: z.string().optional(),
+  avg_deal_size: money.optional(),
+});
+
+export const buyerUpdateSchema = z.object({
+  name: z.string().min(1),
+  phone: z.string().optional(),
+  email: optionalEmail,
+  cash_available: money.optional(),
+  deal_types: z.string().optional(),
+  preferred_areas: z.string().optional(),
+  status: z.string().min(1),
+});
+
+export const dealAnalysisSchema = z.object({
+  purchasePrice: money,
+  repairBudget: money,
+  arv: money,
+  sellingCosts: money,
+  holdingCosts: money,
+  wholesaleFee: money,
+});
+
+export const sellerScoreSchema = z.object({
+  name: z.string().min(1),
+  property_address: z.string().optional(),
+  property_city: z.string().optional(),
+  property_state: z.string().optional(),
+  motivation: z.string().optional(),
+  status: z.string().optional(),
+});
