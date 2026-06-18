@@ -2,10 +2,12 @@ import express from 'express';
 import cors from 'cors';
 import { pathToFileURL } from 'url';
 import { config, integrationStatus } from './config.js';
-import { initDb, db } from './db.js';
+import { initDb, db, dbAll, dbGet, dbRun } from './db.js';
 import { v4 as uuid } from 'uuid';
 import { analyzeDealWithAI, scoreSeller } from './ai-service.js';
 import { getMarketTrends, getNeighborhoodDemographics, geocodeAddress, getLiveComps } from './api-services.js';
+import { computeDeal } from './deal-math.js';
+import { estimateArv, medianPricePerSqft, matchBuyers } from './analytics.js';
 import { asyncHandler, errorHandler, validateBody } from './middleware.js';
 import {
   sellerCreateSchema,
@@ -14,6 +16,8 @@ import {
   buyerUpdateSchema,
   dealAnalysisSchema,
   sellerScoreSchema,
+  dealCreateSchema,
+  dealUpdateSchema,
 } from './schemas.js';
 
 const app = express();
@@ -221,6 +225,85 @@ app.get('/api/live-comps', asyncHandler(async (req, res) => {
   }
   const result = await getLiveComps(address, city, state);
   res.json(result);
+}));
+
+// ========== DEALS ENDPOINTS ==========
+
+app.get('/api/deals', asyncHandler(async (req, res) => {
+  const rows = await dbAll('SELECT * FROM deals ORDER BY created_at DESC');
+  res.json(rows);
+}));
+
+app.get('/api/deals/:id', asyncHandler(async (req, res) => {
+  const row = await dbGet('SELECT * FROM deals WHERE id = ?', [req.params.id]);
+  if (!row) return res.status(404).json({ success: false, error: 'Deal not found' });
+  res.json(row);
+}));
+
+app.post('/api/deals', validateBody(dealCreateSchema), asyncHandler(async (req, res) => {
+  const b = req.body;
+  const { profit, roi } = computeDeal(b);
+  const id = uuid();
+  const now = new Date().toISOString();
+  const deal = {
+    id, name: b.name, property_address: b.property_address || '', city: b.city || '', state: b.state || '',
+    purchase_price: b.purchase_price, repair_budget: b.repair_budget, arv: b.arv,
+    selling_costs: b.selling_costs, holding_costs: b.holding_costs, wholesale_fee: b.wholesale_fee,
+    profit, roi, status: b.status || 'analyzing', created_at: now, updated_at: now,
+  };
+  await dbRun(
+    `INSERT INTO deals (id, name, property_address, city, state, purchase_price, repair_budget, arv, selling_costs, holding_costs, wholesale_fee, profit, roi, status, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [deal.id, deal.name, deal.property_address, deal.city, deal.state, deal.purchase_price, deal.repair_budget, deal.arv, deal.selling_costs, deal.holding_costs, deal.wholesale_fee, deal.profit, deal.roi, deal.status, deal.created_at, deal.updated_at],
+  );
+  res.json(deal);
+}));
+
+app.put('/api/deals/:id', validateBody(dealUpdateSchema), asyncHandler(async (req, res) => {
+  const b = req.body;
+  const { profit, roi } = computeDeal(b);
+  const now = new Date().toISOString();
+  await dbRun(
+    `UPDATE deals SET name = ?, property_address = ?, city = ?, state = ?, purchase_price = ?, repair_budget = ?, arv = ?, selling_costs = ?, holding_costs = ?, wholesale_fee = ?, profit = ?, roi = ?, status = ?, updated_at = ? WHERE id = ?`,
+    [b.name, b.property_address || '', b.city || '', b.state || '', b.purchase_price, b.repair_budget, b.arv, b.selling_costs, b.holding_costs, b.wholesale_fee, profit, roi, b.status || 'analyzing', now, req.params.id],
+  );
+  res.json({ success: true, profit, roi });
+}));
+
+app.delete('/api/deals/:id', asyncHandler(async (req, res) => {
+  await dbRun('DELETE FROM deals WHERE id = ?', [req.params.id]);
+  res.json({ success: true });
+}));
+
+// ========== ARV ESTIMATE FROM COMPS ==========
+
+app.get('/api/arv', asyncHandler(async (req, res) => {
+  const { city, state } = req.query;
+  const sqft = Number(req.query.sqft);
+  if (!sqft || sqft <= 0) return res.status(400).json({ success: false, error: 'A valid sqft is required' });
+
+  let sql = 'SELECT * FROM comps';
+  const params = [];
+  const conds = [];
+  if (city) { conds.push('city = ?'); params.push(city); }
+  if (state) { conds.push('state = ?'); params.push(state); }
+  if (conds.length) sql += ' WHERE ' + conds.join(' AND ');
+
+  const comps = await dbAll(sql, params);
+  const estimatedArv = estimateArv(comps, sqft);
+  if (estimatedArv == null) {
+    return res.json({ success: false, error: 'No comparable sales found for these filters' });
+  }
+  res.json({ success: true, estimatedArv, medianPricePerSqft: medianPricePerSqft(comps), compCount: comps.length, sqft });
+}));
+
+// ========== BUYER MATCHES FOR A DEAL ==========
+
+app.get('/api/deals/:id/matches', asyncHandler(async (req, res) => {
+  const deal = await dbGet('SELECT * FROM deals WHERE id = ?', [req.params.id]);
+  if (!deal) return res.status(404).json({ success: false, error: 'Deal not found' });
+  const buyers = await dbAll('SELECT * FROM buyers');
+  res.json({ success: true, matches: matchBuyers(deal, buyers) });
 }));
 
 app.use(errorHandler);

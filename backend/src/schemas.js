@@ -60,3 +60,19 @@ export const sellerScoreSchema = z.object({
   motivation: z.string().optional(),
   status: z.string().optional(),
 });
+
+export const dealCreateSchema = z.object({
+  name: z.string().min(1),
+  property_address: z.string().optional(),
+  city: z.string().optional(),
+  state: z.string().optional(),
+  purchase_price: money,
+  repair_budget: money,
+  arv: money,
+  selling_costs: money,
+  holding_costs: money,
+  wholesale_fee: money,
+  status: z.string().optional(),
+});
+
+export const dealUpdateSchema = dealCreateSchema;
