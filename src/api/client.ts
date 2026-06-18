@@ -2,7 +2,7 @@ import type {
   Market, Comp, Seller, NewSeller, Buyer, NewBuyer,
   DealInputs, DealAnalysisResult, SellerScoreInput, SellerScoreResult,
   MarketTrend, Neighborhood, GeocodeResult, Health,
-  DealInputFields, Deal, ArvEstimate, DealMatches,
+  DealInputFields, Deal, ArvEstimate, DealMatches, Insights,
 } from './types';
 
 const DEFAULT_BASE_URL = (import.meta.env.VITE_API_URL as string | undefined) ?? 'http://localhost:5000';
@@ -85,3 +85,5 @@ export const estimateArv = (city: string, state: string, sqft: number) => {
 };
 
 export const getDealMatches = (id: string) => apiFetch<DealMatches>(`/api/deals/${id}/matches`);
+
+export const getInsights = () => apiFetch<Insights>('/api/insights');

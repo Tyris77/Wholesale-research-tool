@@ -154,6 +154,42 @@ export interface BuyerMatch {
   reasons: string[];
 }
 
+export interface InsightDeal {
+  id: string;
+  name: string;
+  profit: number;
+  roi: number;
+  status: string;
+}
+
+export interface InsightMarket {
+  id: string;
+  city: string;
+  state: string;
+  heat_score: number;
+  trend: string;
+}
+
+export interface Insights {
+  deals: {
+    total: number;
+    active: number;
+    byStatus: Record<string, number>;
+    pipelineValue: number;
+    projectedProfit: number;
+    avgRoi: number;
+    matchedCount: number;
+    profitByMonth: { month: string; profit: number; count: number }[];
+    topByProfit: InsightDeal[];
+  };
+  leads: {
+    sellers: number;
+    buyers: number;
+    sellersByStatus: Record<string, number>;
+  };
+  markets: { top: InsightMarket[] };
+}
+
 export interface DealMatches {
   success: boolean;
   matches: BuyerMatch[];
