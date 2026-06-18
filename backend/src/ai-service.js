@@ -1,10 +1,16 @@
 import Groq from 'groq-sdk';
 
 const MODEL = 'llama-3.3-70b-versatile';
+const NO_KEY_ERROR = 'GROQ_API_KEY not configured. Please set it in backend/.env';
 
+let cachedClient = null;
+
+// Lazy singleton: reads env at call time (after dotenv has loaded) and reuses
+// the client across requests instead of allocating one per call.
 export function createGroqClient(apiKey = process.env.GROQ_API_KEY) {
   if (!apiKey) return null;
-  return new Groq({ apiKey });
+  if (!cachedClient) cachedClient = new Groq({ apiKey });
+  return cachedClient;
 }
 
 function buildDealPrompt(d) {
@@ -45,7 +51,7 @@ Provide:
 
 export async function analyzeDealWithAI(dealData, client = createGroqClient()) {
   if (!client) {
-    return { success: false, error: 'GROQ_API_KEY not configured. Please set it in backend/.env' };
+    return { success: false, error: NO_KEY_ERROR };
   }
   try {
     const completion = await client.chat.completions.create({
@@ -62,7 +68,7 @@ export async function analyzeDealWithAI(dealData, client = createGroqClient()) {
 
 export async function scoreSeller(sellerData, client = createGroqClient()) {
   if (!client) {
-    return { success: false, error: 'GROQ_API_KEY not configured. Please set it in backend/.env' };
+    return { success: false, error: NO_KEY_ERROR };
   }
   try {
     const completion = await client.chat.completions.create({
@@ -70,7 +76,7 @@ export async function scoreSeller(sellerData, client = createGroqClient()) {
       max_tokens: 300,
       messages: [{ role: 'user', content: buildSellerPrompt(sellerData) }],
     });
-    return { success: true, scoring: completion.choices[0].message.content };
+    return { success: true, scoring: completion.choices[0].message.content, model: MODEL };
   } catch (error) {
     console.error('Seller scoring error:', error.message);
     return { success: false, error: error.message };
