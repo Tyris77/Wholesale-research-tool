@@ -1,279 +1,134 @@
 import { useState } from 'react';
+import { getMarketTrends, getNeighborhood, geocode } from '../api/client';
+import { useAsync } from '../hooks/useAsync';
+import { Loading, ErrorBanner } from '../components/states';
+import type { MarketTrend, Neighborhood, GeocodeResult } from '../api/types';
 
-interface MarketTrendData {
-  metro?: string;
-  series_id?: string;
-  observations?: Array<{ date: string; value: string }>;
-  error?: string;
-  success?: boolean;
-}
-
-interface NeighborhoodData {
-  zipCode?: string;
-  population?: number;
-  medianIncome?: number;
-  povertyRate?: number;
-  error?: string;
-  success?: boolean;
-}
-
-interface GeocodeResult {
-  address?: string;
-  latitude?: string;
-  longitude?: string;
-  error?: string;
-  success?: boolean;
-}
+const METROS = ['Atlanta', 'Phoenix', 'Dallas', 'Denver', 'Tampa', 'Charlotte', 'Austin', 'Nashville'];
 
 export function AdvancedResearch() {
-  const [marketTrends, setMarketTrends] = useState<MarketTrendData | null>(null);
-  const [selectedMetro, setSelectedMetro] = useState('Atlanta');
-  const [loadingTrends, setLoadingTrends] = useState(false);
+  const [metro, setMetro] = useState('Atlanta');
+  const trends = useAsync<MarketTrend, [string]>(getMarketTrends);
 
-  const [neighborhood, setNeighborhood] = useState<NeighborhoodData | null>(null);
-  const [zipCode, setZipCode] = useState('30303');
-  const [loadingNeighborhood, setLoadingNeighborhood] = useState(false);
+  const [zip, setZip] = useState('30303');
+  const demo = useAsync<Neighborhood, [string]>(getNeighborhood);
 
-  const [geocodeResult, setGeocodeResult] = useState<GeocodeResult | null>(null);
-  const [geocodeAddress, setGeocodeAddress] = useState('');
-  const [geocodeCity, setGeocodeCity] = useState('');
-  const [geocodeState, setGeocodeState] = useState('');
-  const [loadingGeocode, setLoadingGeocode] = useState(false);
+  const [addr, setAddr] = useState({ address: '', city: '', state: '' });
+  const geo = useAsync<GeocodeResult, [string, string, string]>(geocode);
 
-  const metros = ['Atlanta', 'Phoenix', 'Dallas', 'Denver', 'Tampa', 'Charlotte', 'Austin', 'Nashville'];
-
-  const handleGetMarketTrends = async () => {
-    setLoadingTrends(true);
-    try {
-      const response = await fetch(`http://localhost:5000/api/market-trends/${selectedMetro}`);
-      const result = await response.json();
-      setMarketTrends(result);
-    } catch (error) {
-      console.error('Error fetching market trends:', error);
-    }
-    setLoadingTrends(false);
-  };
-
-  const handleGetNeighborhood = async () => {
-    setLoadingNeighborhood(true);
-    try {
-      const response = await fetch(`http://localhost:5000/api/neighborhood/${zipCode}`);
-      const result = await response.json();
-      setNeighborhood(result);
-    } catch (error) {
-      console.error('Error fetching neighborhood data:', error);
-    }
-    setLoadingNeighborhood(false);
-  };
-
-  const handleGeocode = async () => {
-    setLoadingGeocode(true);
-    try {
-      const params = new URLSearchParams({
-        address: geocodeAddress,
-        city: geocodeCity,
-        state: geocodeState,
-      });
-      const response = await fetch(`http://localhost:5000/api/geocode?${params}`);
-      const result = await response.json();
-      setGeocodeResult(result);
-    } catch (error) {
-      console.error('Error geocoding address:', error);
-    }
-    setLoadingGeocode(false);
-  };
+  const trend = trends.data;
+  const neighborhood = demo.data;
+  const geocoded = geo.data;
 
   return (
-    <div className="page-shell">
+    <>
       <header className="hero-panel">
         <h1>Advanced Market Research</h1>
         <p>Dive deep into market trends, neighborhood data, and property locations using live government APIs.</p>
       </header>
 
-      <main className="layout-single">
-        {/* Market Trends */}
+      <div className="layout-single">
         <section className="panel">
           <h2>Market Trends (FRED Data)</h2>
-          <p style={{ fontSize: '0.9rem', color: '#6b7280', marginBottom: '16px' }}>
-            Quarterly price trends powered by Federal Reserve Economic Data
-          </p>
+          <p className="section-hint">Quarterly price trends powered by Federal Reserve Economic Data.</p>
           <div className="form-grid">
             <label>
               <span>Select Metro Area</span>
-              <select value={selectedMetro} onChange={(e) => setSelectedMetro(e.target.value)}>
-                {metros.map((metro) => (
-                  <option key={metro} value={metro}>
-                    {metro}
-                  </option>
-                ))}
+              <select value={metro} onChange={(e) => setMetro(e.target.value)}>
+                {METROS.map((m) => <option key={m} value={m}>{m}</option>)}
               </select>
             </label>
-            <button
-              onClick={handleGetMarketTrends}
-              disabled={loadingTrends}
-              style={{ gridColumn: '1 / -1' }}
-            >
-              {loadingTrends ? 'Loading...' : 'Get Market Trends'}
+            <button onClick={() => trends.run(metro)} disabled={trends.loading} style={{ gridColumn: '1 / -1' }}>
+              {trends.loading ? 'Loading…' : 'Get Market Trends'}
             </button>
           </div>
-
-          {marketTrends && (
-            <div className="results-card" style={{ marginTop: '24px' }}>
-              {marketTrends.error ? (
-                <p style={{ color: '#b91c1c' }}>Error: {marketTrends.error}</p>
+          {trends.loading && <Loading />}
+          {trends.error && <ErrorBanner message={trends.error} onRetry={() => trends.run(metro)} />}
+          {trend && (
+            <div className="results-card">
+              {trend.success === false || trend.error ? (
+                <p className="bad-deal">Error: {trend.error}</p>
               ) : (
-                <div>
-                  <p>
-                    <strong>{marketTrends.metro} Market Trends</strong>
-                  </p>
-                  <p style={{ fontSize: '0.9rem', color: '#6b7280', marginBottom: '12px' }}>
-                    Series ID: {marketTrends.series_id}
-                  </p>
-                  {marketTrends.observations && marketTrends.observations.length > 0 ? (
-                    <div style={{ overflowX: 'auto' }}>
-                      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                        <thead>
-                          <tr style={{ borderBottom: '1px solid #e5e7eb' }}>
-                            <th style={{ textAlign: 'left', padding: '8px' }}>Date</th>
-                            <th style={{ textAlign: 'right', padding: '8px' }}>% Change</th>
+                <>
+                  <p><strong>{trend.metro} Market Trends</strong></p>
+                  <p className="text-muted">Series ID: {trend.series_id}</p>
+                  {trend.observations && trend.observations.length > 0 ? (
+                    <table className="data-table">
+                      <thead><tr><th>Date</th><th className="num">% Change</th></tr></thead>
+                      <tbody>
+                        {trend.observations.slice(0, 10).map((obs, i) => (
+                          <tr key={i}>
+                            <td>{obs.date}</td>
+                            <td className="num" style={{ color: parseFloat(obs.value) > 0 ? '#047857' : '#b91c1c' }}>{obs.value}%</td>
                           </tr>
-                        </thead>
-                        <tbody>
-                          {marketTrends.observations.slice(0, 10).map((obs, idx) => (
-                            <tr key={idx} style={{ borderBottom: '1px solid #f3f4f6' }}>
-                              <td style={{ padding: '8px' }}>{obs.date}</td>
-                              <td style={{ textAlign: 'right', padding: '8px', color: parseFloat(obs.value) > 0 ? '#047857' : '#b91c1c' }}>
-                                {obs.value}%
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
+                        ))}
+                      </tbody>
+                    </table>
                   ) : (
-                    <p style={{ color: '#6b7280' }}>No data available</p>
+                    <p className="text-muted">No data available</p>
                   )}
-                </div>
+                </>
               )}
             </div>
           )}
         </section>
 
-        {/* Neighborhood Demographics */}
         <section className="panel">
           <h2>Neighborhood Demographics (Census API)</h2>
-          <p style={{ fontSize: '0.9rem', color: '#6b7280', marginBottom: '16px' }}>
-            Population, income, and poverty data by zip code
-          </p>
+          <p className="section-hint">Population, income, and poverty data by zip code.</p>
           <div className="form-grid">
             <label>
               <span>ZIP Code</span>
-              <input
-                type="text"
-                value={zipCode}
-                onChange={(e) => setZipCode(e.target.value)}
-                placeholder="e.g., 30303"
-              />
+              <input value={zip} onChange={(e) => setZip(e.target.value)} placeholder="e.g., 30303" />
             </label>
-            <button onClick={handleGetNeighborhood} disabled={loadingNeighborhood}>
-              {loadingNeighborhood ? 'Loading...' : 'Get Demographics'}
-            </button>
+            <button onClick={() => demo.run(zip)} disabled={demo.loading}>{demo.loading ? 'Loading…' : 'Get Demographics'}</button>
           </div>
-
+          {demo.loading && <Loading />}
+          {demo.error && <ErrorBanner message={demo.error} onRetry={() => demo.run(zip)} />}
           {neighborhood && (
-            <div className="results-card" style={{ marginTop: '24px' }}>
-              {neighborhood.error ? (
-                <p style={{ color: '#b91c1c' }}>Error: {neighborhood.error}</p>
+            <div className="results-card">
+              {neighborhood.success === false || neighborhood.error ? (
+                <p className="bad-deal">Error: {neighborhood.error}</p>
               ) : (
-                <div>
-                  <p>
-                    <strong>ZIP Code {neighborhood.zipCode}</strong>
-                  </p>
-                  <p>Population: {neighborhood.population?.toLocaleString() || 'N/A'}</p>
-                  <p>Median Income: ${neighborhood.medianIncome?.toLocaleString() || 'N/A'}</p>
-                  <p>Poverty Rate: {neighborhood.povertyRate || 'N/A'}%</p>
-                </div>
+                <>
+                  <p><strong>ZIP Code {neighborhood.zipCode}</strong></p>
+                  <p>Population: {neighborhood.population?.toLocaleString() ?? 'N/A'}</p>
+                  <p>Median Income: ${neighborhood.medianIncome?.toLocaleString() ?? 'N/A'}</p>
+                  <p>Poverty Rate: {neighborhood.povertyRate ?? 'N/A'}%</p>
+                </>
               )}
             </div>
           )}
         </section>
 
-        {/* Geocoding */}
         <section className="panel">
           <h2>Geocode Address</h2>
-          <p style={{ fontSize: '0.9rem', color: '#6b7280', marginBottom: '16px' }}>
-            Convert addresses to coordinates (powered by OpenStreetMap)
-          </p>
+          <p className="section-hint">Convert addresses to coordinates (powered by OpenStreetMap).</p>
           <div className="form-grid">
-            <input
-              type="text"
-              placeholder="Address"
-              value={geocodeAddress}
-              onChange={(e) => setGeocodeAddress(e.target.value)}
-            />
-            <input
-              type="text"
-              placeholder="City"
-              value={geocodeCity}
-              onChange={(e) => setGeocodeCity(e.target.value)}
-            />
-            <input
-              type="text"
-              placeholder="State"
-              value={geocodeState}
-              onChange={(e) => setGeocodeState(e.target.value)}
-            />
-            <button
-              onClick={handleGeocode}
-              disabled={loadingGeocode || !geocodeAddress}
-              style={{ gridColumn: '1 / -1' }}
-            >
-              {loadingGeocode ? 'Geocoding...' : 'Geocode Address'}
+            <input placeholder="Address" value={addr.address} onChange={(e) => setAddr({ ...addr, address: e.target.value })} />
+            <input placeholder="City" value={addr.city} onChange={(e) => setAddr({ ...addr, city: e.target.value })} />
+            <input placeholder="State" value={addr.state} onChange={(e) => setAddr({ ...addr, state: e.target.value })} />
+            <button onClick={() => geo.run(addr.address, addr.city, addr.state)} disabled={geo.loading || !addr.address} style={{ gridColumn: '1 / -1' }}>
+              {geo.loading ? 'Geocoding…' : 'Geocode Address'}
             </button>
           </div>
-
-          {geocodeResult && (
-            <div className="results-card" style={{ marginTop: '24px' }}>
-              {geocodeResult.error ? (
-                <p style={{ color: '#b91c1c' }}>Error: {geocodeResult.error}</p>
+          {geo.loading && <Loading />}
+          {geo.error && <ErrorBanner message={geo.error} onRetry={() => geo.run(addr.address, addr.city, addr.state)} />}
+          {geocoded && (
+            <div className="results-card">
+              {geocoded.success === false || geocoded.error ? (
+                <p className="bad-deal">Error: {geocoded.error}</p>
               ) : (
-                <div>
-                  <p>
-                    <strong>Address:</strong> {geocodeResult.address}
-                  </p>
-                  <p>
-                    <strong>Latitude:</strong> {geocodeResult.latitude}
-                  </p>
-                  <p>
-                    <strong>Longitude:</strong> {geocodeResult.longitude}
-                  </p>
-                  <p style={{ fontSize: '0.9rem', color: '#6b7280', marginTop: '12px' }}>
-                    Copy these coordinates to Google Maps or use in your app
-                  </p>
-                </div>
+                <>
+                  <p><strong>Address:</strong> {geocoded.address}</p>
+                  <p><strong>Latitude:</strong> {geocoded.latitude}</p>
+                  <p><strong>Longitude:</strong> {geocoded.longitude}</p>
+                </>
               )}
             </div>
           )}
         </section>
-
-        <section className="panel">
-          <h2>💡 API Guide</h2>
-          <div style={{ fontSize: '0.9rem', lineHeight: '1.8', color: '#374151' }}>
-            <p>
-              <strong>Market Trends (FRED):</strong> Quarterly home price % changes from Federal Reserve
-            </p>
-            <p>
-              <strong>Demographics (Census):</strong> Population, income, poverty data by ZIP
-            </p>
-            <p>
-              <strong>Geocoding (OpenStreetMap):</strong> Free, unlimited address to coordinates
-            </p>
-            <p style={{ color: '#6b7280', marginTop: '12px' }}>
-              ℹ️ All APIs are free or include generous free tiers
-            </p>
-          </div>
-        </section>
-      </main>
-    </div>
+      </div>
+    </>
   );
 }
