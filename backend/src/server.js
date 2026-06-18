@@ -6,6 +6,15 @@ import { initDb, db } from './db.js';
 import { v4 as uuid } from 'uuid';
 import { analyzeDealWithAI, scoreSeller } from './ai-service.js';
 import { getMarketTrends, getNeighborhoodDemographics, geocodeAddress, getLiveComps } from './api-services.js';
+import { asyncHandler, errorHandler, validateBody } from './middleware.js';
+import {
+  sellerCreateSchema,
+  sellerUpdateSchema,
+  buyerCreateSchema,
+  buyerUpdateSchema,
+  dealAnalysisSchema,
+  sellerScoreSchema,
+} from './schemas.js';
 
 const app = express();
 app.use(cors({ origin: config.corsOrigin }));
@@ -69,7 +78,7 @@ app.get('/api/sellers', (req, res) => {
   });
 });
 
-app.post('/api/sellers', (req, res) => {
+app.post('/api/sellers', validateBody(sellerCreateSchema), (req, res) => {
   const { name, phone, email, property_address, property_city, property_state, motivation } = req.body;
   const id = uuid();
   const created_at = new Date().toISOString();
@@ -85,7 +94,7 @@ app.post('/api/sellers', (req, res) => {
   );
 });
 
-app.put('/api/sellers/:id', (req, res) => {
+app.put('/api/sellers/:id', validateBody(sellerUpdateSchema), (req, res) => {
   const { name, phone, email, status, motivation } = req.body;
   const last_contacted = new Date().toISOString();
   
@@ -107,7 +116,7 @@ app.get('/api/buyers', (req, res) => {
   });
 });
 
-app.post('/api/buyers', (req, res) => {
+app.post('/api/buyers', validateBody(buyerCreateSchema), (req, res) => {
   const { name, phone, email, cash_available, deal_types, preferred_areas, avg_deal_size } = req.body;
   const id = uuid();
   const created_at = new Date().toISOString();
@@ -123,7 +132,7 @@ app.post('/api/buyers', (req, res) => {
   );
 });
 
-app.put('/api/buyers/:id', (req, res) => {
+app.put('/api/buyers/:id', validateBody(buyerUpdateSchema), (req, res) => {
   const { name, phone, email, cash_available, deal_types, preferred_areas, status } = req.body;
   const last_contacted = new Date().toISOString();
   
@@ -170,51 +179,51 @@ app.get('/api/properties/search', (req, res) => {
 
 // ========== AI ANALYSIS ENDPOINTS ==========
 
-app.post('/api/analyze-deal', async (req, res) => {
-  const dealData = req.body;
-  const result = await analyzeDealWithAI(dealData);
+app.post('/api/analyze-deal', validateBody(dealAnalysisSchema), asyncHandler(async (req, res) => {
+  const result = await analyzeDealWithAI(req.body);
   res.json(result);
-});
+}));
 
-app.post('/api/score-seller', async (req, res) => {
-  const sellerData = req.body;
-  const result = await scoreSeller(sellerData);
+app.post('/api/score-seller', validateBody(sellerScoreSchema), asyncHandler(async (req, res) => {
+  const result = await scoreSeller(req.body);
   res.json(result);
-});
+}));
 
 // ========== MARKET DATA ENDPOINTS ==========
 
-app.get('/api/market-trends/:metro', async (req, res) => {
+app.get('/api/market-trends/:metro', asyncHandler(async (req, res) => {
   const { metro } = req.params;
   const result = await getMarketTrends(metro);
   res.json(result);
-});
+}));
 
-app.get('/api/neighborhood/:zipCode', async (req, res) => {
+app.get('/api/neighborhood/:zipCode', asyncHandler(async (req, res) => {
   const { zipCode } = req.params;
   const result = await getNeighborhoodDemographics(zipCode);
   res.json(result);
-});
+}));
 
 // ========== GEOCODING ENDPOINTS ==========
 
-app.get('/api/geocode', async (req, res) => {
+app.get('/api/geocode', asyncHandler(async (req, res) => {
   const { address, city, state } = req.query;
   const fullAddress = `${address} ${city} ${state}`.trim();
   const result = await geocodeAddress(fullAddress);
   res.json(result);
-});
+}));
 
 // ========== LIVE COMPS ENDPOINTS ==========
 
-app.get('/api/live-comps', async (req, res) => {
+app.get('/api/live-comps', asyncHandler(async (req, res) => {
   const { address, city, state } = req.query;
   if (!address || !city || !state) {
-    return res.status(400).json({ error: 'Missing address, city, or state' });
+    return res.status(400).json({ success: false, error: 'Missing address, city, or state' });
   }
   const result = await getLiveComps(address, city, state);
   res.json(result);
-});
+}));
+
+app.use(errorHandler);
 
 export default app;
 
