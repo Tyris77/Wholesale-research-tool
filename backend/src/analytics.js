@@ -22,6 +22,20 @@ function areaCovers(areas, term) {
   return new RegExp(`\\b${escaped}\\b`).test(areas);
 }
 
+// Buyers describe their interests in free text (e.g. "buy and hold, rentals"),
+// so map each canonical deal_type to the phrases a buyer might actually use.
+const DEAL_TYPE_SYNONYMS = {
+  wholesale: ['wholesale', 'wholesaling', 'assignment'],
+  flip: ['flip', 'fix and flip', 'fix & flip', 'rehab'],
+  buy_hold: ['buy_hold', 'buy and hold', 'buy & hold', 'buy-and-hold', 'buy hold', 'rental'],
+};
+
+function buyerWantsType(dealTypes, dealType) {
+  if (!dealType) return false;
+  const synonyms = DEAL_TYPE_SYNONYMS[dealType] || [dealType];
+  return synonyms.some((s) => dealTypes.includes(s));
+}
+
 // Scores each buyer against a deal by area coverage and price/size fit.
 // Returns [{ buyer, score, reasons }] sorted desc, excluding zero-score buyers.
 export function matchBuyers(deal, buyers) {
@@ -45,7 +59,7 @@ export function matchBuyers(deal, buyers) {
         score += 1;
         reasons.push('Matches typical deal size');
       }
-      if (deal.deal_type && (buyer.deal_types || '').toLowerCase().includes(deal.deal_type.toLowerCase())) {
+      if (buyerWantsType((buyer.deal_types || '').toLowerCase(), deal.deal_type)) {
         score += 1;
         reasons.push(`Wants ${deal.deal_type.replace('_', ' ')} deals`);
       }

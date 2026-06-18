@@ -39,6 +39,15 @@ test('matchBuyers does not credit a state code that only appears as a substring'
   assert.equal(matchBuyers(deal, buyers).length, 0);
 });
 
+test('matchBuyers matches a buy_hold deal to a "buy and hold" buyer', () => {
+  const deal = { city: 'Atlanta', state: 'GA', purchase_price: 120000, deal_type: 'buy_hold' };
+  // No area/cash overlap, so only the deal-type dimension can score.
+  const buyers = [{ id: 'h', name: 'H', preferred_areas: '', cash_available: 0, avg_deal_size: 0, deal_types: 'rentals, buy and hold' }];
+  const matches = matchBuyers(deal, buyers);
+  assert.equal(matches.length, 1);
+  assert.ok(matches[0].reasons.some((r) => /buy/i.test(r)));
+});
+
 test('matchBuyers credits a buyer whose deal_types include the deal type', () => {
   const deal = { city: 'Atlanta', state: 'GA', purchase_price: 120000, deal_type: 'flip' };
   const buyers = [
