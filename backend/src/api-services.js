@@ -96,39 +96,30 @@ export async function geocodeAddress(address) {
   }
 }
 
-// RealtyMole API - Live Comps (requires API key)
-export async function getLiveComps(address, city, state) {
+// RentCast API - property value estimate + comparable sales
+export async function getLiveComps(address, city, state, { apiKey = process.env.RENTCAST_API_KEY, fetchFn = fetch } = {}) {
   try {
-    const apiKey = process.env.REALTYMOLE_API_KEY;
-    if (!apiKey) return { error: 'RealtyMole API key not configured' };
+    if (!apiKey) return { success: false, error: 'RENTCAST_API_KEY not configured' };
 
-    // Search for properties
-    const searchResponse = await fetch('https://api.realtymole.com/api/v1/properties', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-API-Key': apiKey,
-      },
-      body: JSON.stringify({
-        address,
-        city,
-        state,
-        includeForeclosures: true,
-        includeSoldListings: true,
-      }),
+    const fullAddress = `${address}, ${city}, ${state}`;
+    const url = `https://api.rentcast.io/v1/avm/value?address=${encodeURIComponent(fullAddress)}`;
+
+    const response = await fetchFn(url, {
+      headers: { 'X-Api-Key': apiKey, accept: 'application/json' },
     });
+    if (!response.ok) throw new Error(`RentCast error: ${response.status}`);
 
-    if (!searchResponse.ok) throw new Error(`RealtyMole error: ${searchResponse.status}`);
-
-    const comps = await searchResponse.json();
-
+    const data = await response.json();
+    const comps = data.comparables || [];
     return {
       success: true,
-      comps: comps.properties || [],
-      count: comps.properties?.length || 0,
+      estimatedValue: data.price ?? null,
+      valueRange: { low: data.priceRangeLow ?? null, high: data.priceRangeHigh ?? null },
+      comps,
+      count: comps.length,
     };
   } catch (error) {
-    console.error('RealtyMole API error:', error.message);
-    return { error: error.message };
+    console.error('RentCast API error:', error.message);
+    return { success: false, error: error.message };
   }
 }

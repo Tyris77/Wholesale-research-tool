@@ -34,3 +34,33 @@ test('getMarketTrends returns error when no api key', async () => {
   const result = await getMarketTrends('Atlanta', { apiKey: undefined, fetchFn: async () => { throw new Error('should not be called'); } });
   assert.equal(result.error, 'FRED API key not configured');
 });
+
+import { getLiveComps } from './api-services.js';
+
+test('getLiveComps queries RentCast AVM and maps comps', async () => {
+  const captured = {};
+  const body = {
+    price: 312000,
+    priceRangeLow: 300000,
+    priceRangeHigh: 325000,
+    comparables: [{ formattedAddress: '5 Oak St', price: 305000 }],
+  };
+  const fetchFn = async (url, opts) => {
+    captured.url = url;
+    captured.opts = opts;
+    return { ok: true, status: 200, json: async () => body };
+  };
+  const result = await getLiveComps('4812 Maple St', 'Atlanta', 'GA', { apiKey: 'k', fetchFn });
+
+  assert.equal(result.success, true);
+  assert.equal(result.estimatedValue, 312000);
+  assert.equal(result.count, 1);
+  assert.match(captured.url, /api\.rentcast\.io\/v1\/avm\/value/);
+  assert.equal(captured.opts.headers['X-Api-Key'], 'k');
+});
+
+test('getLiveComps returns error when no api key', async () => {
+  const result = await getLiveComps('a', 'b', 'c', { apiKey: undefined, fetchFn: async () => { throw new Error('nope'); } });
+  assert.equal(result.success, false);
+  assert.match(result.error, /RENTCAST_API_KEY/);
+});
