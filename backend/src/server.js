@@ -8,6 +8,7 @@ import { analyzeDealWithAI, scoreSeller } from './ai-service.js';
 import { getMarketTrends, getNeighborhoodDemographics, geocodeAddress, getLiveComps } from './api-services.js';
 import { computeDeal } from './deal-math.js';
 import { estimateArv, medianPricePerSqft, matchBuyers } from './analytics.js';
+import { summarizeDeals, profitByMonth, leadFunnel, matchedDealCount, topMarkets } from './insights.js';
 import { asyncHandler, errorHandler, validateBody } from './middleware.js';
 import {
   sellerCreateSchema,
@@ -305,6 +306,27 @@ app.get('/api/deals/:id/matches', asyncHandler(async (req, res) => {
   if (!deal) return res.status(404).json({ success: false, error: 'Deal not found' });
   const buyers = await dbAll('SELECT * FROM buyers');
   res.json({ success: true, matches: matchBuyers(deal, buyers) });
+}));
+
+// ========== INSIGHTS / ANALYTICS ==========
+
+app.get('/api/insights', asyncHandler(async (req, res) => {
+  const [deals, sellers, buyers, markets] = await Promise.all([
+    dbAll('SELECT * FROM deals'),
+    dbAll('SELECT * FROM sellers'),
+    dbAll('SELECT * FROM buyers'),
+    dbAll('SELECT * FROM markets'),
+  ]);
+
+  res.json({
+    deals: {
+      ...summarizeDeals(deals),
+      matchedCount: matchedDealCount(deals, buyers),
+      profitByMonth: profitByMonth(deals),
+    },
+    leads: leadFunnel(sellers, buyers),
+    markets: { top: topMarkets(markets, 5) },
+  });
 }));
 
 app.use(errorHandler);
