@@ -32,6 +32,13 @@ test('matchBuyers ranks by area + price fit and filters zero scores', () => {
   assert.equal(matches.find((m) => m.buyer.id === 'b'), undefined);
 });
 
+test('matchBuyers does not credit a state code that only appears as a substring', () => {
+  const deal = { city: 'Atlanta', state: 'GA', purchase_price: 120000 };
+  // "Niagara" contains "ga" as a substring but is not Georgia coverage.
+  const buyers = [{ id: 'n', name: 'N', preferred_areas: 'Niagara Falls', cash_available: 0, avg_deal_size: 0 }];
+  assert.equal(matchBuyers(deal, buyers).length, 0);
+});
+
 test('matchBuyers credits a buyer whose deal_types include the deal type', () => {
   const deal = { city: 'Atlanta', state: 'GA', purchase_price: 120000, deal_type: 'flip' };
   const buyers = [

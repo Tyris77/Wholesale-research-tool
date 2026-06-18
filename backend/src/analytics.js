@@ -14,6 +14,14 @@ export function estimateArv(comps, sqft) {
   return Math.round(median * sqft);
 }
 
+// Whole-word match so a 2-letter state code ("GA") isn't matched inside an
+// unrelated place name ("Niagara"). The term is escaped before use in a regex.
+function areaCovers(areas, term) {
+  if (!term) return false;
+  const escaped = term.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`\\b${escaped}\\b`).test(areas);
+}
+
 // Scores each buyer against a deal by area coverage and price/size fit.
 // Returns [{ buyer, score, reasons }] sorted desc, excluding zero-score buyers.
 export function matchBuyers(deal, buyers) {
@@ -22,10 +30,10 @@ export function matchBuyers(deal, buyers) {
       let score = 0;
       const reasons = [];
       const areas = (buyer.preferred_areas || '').toLowerCase();
-      if (deal.city && areas.includes(deal.city.toLowerCase())) {
+      if (deal.city && areaCovers(areas, deal.city)) {
         score += 2;
         reasons.push(`Covers ${deal.city}`);
-      } else if (deal.state && areas.includes(deal.state.toLowerCase())) {
+      } else if (deal.state && areaCovers(areas, deal.state)) {
         score += 1;
         reasons.push(`Covers ${deal.state}`);
       }
