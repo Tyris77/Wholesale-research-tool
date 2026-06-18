@@ -1,28 +1,28 @@
-// FRED API - Federal Reserve Economic Data
-export async function getMarketTrends(metroArea = 'Atlanta') {
+// FRED API - Federal Reserve Economic Data (FHFA All-Transactions House Price Index)
+const FRED_SERIES_BY_METRO = {
+  Atlanta: 'ATNHPIUS12060Q',
+  Phoenix: 'ATNHPIUS38060Q',
+  Dallas: 'ATNHPIUS19100Q',
+  Denver: 'ATNHPIUS19740Q',
+  Tampa: 'ATNHPIUS45300Q',
+  Charlotte: 'ATNHPIUS16740Q',
+  Austin: 'ATNHPIUS12420Q',
+  Nashville: 'ATNHPIUS34980Q',
+};
+const FRED_NATIONAL_SERIES = 'USSTHPI';
+
+export async function getMarketTrends(metroArea = 'Atlanta', { apiKey = process.env.FRED_API_KEY, fetchFn = fetch } = {}) {
   try {
-    const apiKey = process.env.FRED_API_KEY;
     if (!apiKey) return { error: 'FRED API key not configured' };
 
-    // Series IDs for different metros
-    const seriesMap = {
-      'Atlanta': 'ATNHPI', // Atlanta Home Price Index
-      'Phoenix': 'PHXHPI',
-      'Dallas': 'DALSXR', // Dallas sales
-      'Denver': 'DENHPI',
-      'Tampa': 'BPSMNRNSA', // National (fallback)
-    };
+    const seriesId = FRED_SERIES_BY_METRO[metroArea] || FRED_NATIONAL_SERIES;
+    const url = `https://api.stlouisfed.org/fred/series/observations?series_id=${seriesId}`
+      + `&units=pch&frequency=q&sort_order=desc&limit=12&api_key=${apiKey}&file_type=json`;
 
-    const seriesId = seriesMap[metroArea] || 'MMNRNSA'; // National median home price
-
-    const response = await fetch(
-      `https://api.stlouisfed.org/fred/series/data?series_id=${seriesId}&units=pch&frequency=q&api_key=${apiKey}&file_type=json&limit=12`
-    );
-
+    const response = await fetchFn(url);
     if (!response.ok) throw new Error(`FRED API error: ${response.status}`);
 
     const data = await response.json();
-
     return {
       success: true,
       metro: metroArea,
