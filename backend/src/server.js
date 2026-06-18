@@ -1,13 +1,14 @@
 import express from 'express';
 import cors from 'cors';
+import { pathToFileURL } from 'url';
+import { config } from './config.js';
 import { initDb, db } from './db.js';
 import { v4 as uuid } from 'uuid';
 import { analyzeDealWithAI, scoreSeller } from './ai-service.js';
 import { getMarketTrends, getNeighborhoodDemographics, geocodeAddress, getLiveComps } from './api-services.js';
-import 'dotenv/config';
 
 const app = express();
-app.use(cors());
+app.use(cors({ origin: config.corsOrigin }));
 app.use(express.json());
 
 initDb();
@@ -162,10 +163,6 @@ app.get('/api/properties/search', (req, res) => {
   });
 });
 
-const PORT = 5000;
-app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
-});
 
 // ========== AI ANALYSIS ENDPOINTS ==========
 
@@ -214,3 +211,12 @@ app.get('/api/live-comps', async (req, res) => {
   const result = await getLiveComps(address, city, state);
   res.json(result);
 });
+
+export default app;
+
+const isMain = import.meta.url === pathToFileURL(process.argv[1]).href;
+if (isMain) {
+  app.listen(config.port, () => {
+    console.log(`Server running on http://localhost:${config.port}`);
+  });
+}
