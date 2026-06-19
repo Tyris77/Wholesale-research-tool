@@ -8,6 +8,7 @@ import { SellerLeadManager } from './pages/SellerLeadManager';
 import { BuyerDirectory } from './pages/BuyerDirectory';
 import { Deals } from './pages/Deals';
 import { DealSheet } from './pages/DealSheet';
+import { Insights } from './pages/Insights';
 import { AIAnalyzer } from './pages/AIAnalyzer';
 import { AdvancedResearch } from './pages/AdvancedResearch';
 
@@ -23,6 +24,7 @@ export default function App() {
         <Route path="buyers" element={<BuyerDirectory />} />
         <Route path="deals" element={<Deals />} />
         <Route path="deals/:id/sheet" element={<DealSheet />} />
+        <Route path="insights" element={<Insights />} />
         <Route path="ai" element={<AIAnalyzer />} />
         <Route path="research" element={<AdvancedResearch />} />
         <Route path="*" element={<Navigate to="/" replace />} />
