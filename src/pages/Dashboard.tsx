@@ -1,10 +1,10 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { calculateWholesaleDeal, formatCurrency, type DealInputs } from '../lib/deal';
-import { getMarkets } from '../api/client';
+import { getMarkets, getInsights } from '../api/client';
 import { useAsync } from '../hooks/useAsync';
 import { Loading, ErrorBanner } from '../components/states';
-import type { Market } from '../api/types';
+import type { Market, Insights } from '../api/types';
 
 const QUICK_FIELDS: { label: string; key: keyof DealInputs }[] = [
   { label: 'Purchase price', key: 'purchasePrice' },
@@ -20,6 +20,7 @@ export function Dashboard() {
   });
   const results = useMemo(() => calculateWholesaleDeal(inputs), [inputs]);
   const markets = useAsync<Market[]>(getMarkets, true);
+  const insights = useAsync<Insights>(getInsights, true);
 
   return (
     <>
@@ -28,6 +29,17 @@ export function Dashboard() {
         <h1>Wholesale Intelligence Lab</h1>
         <p>Input your numbers, compare comps, and evaluate deals across hot U.S. markets.</p>
       </header>
+
+      {insights.data && insights.data.deals.total > 0 && (
+        <section className="panel">
+          <div className="kpi-grid">
+            <div className="kpi"><p className="kpi-label">Pipeline value</p><p className="kpi-value">{formatCurrency(insights.data.deals.pipelineValue)}</p></div>
+            <div className="kpi"><p className="kpi-label">Projected profit</p><p className="kpi-value">{formatCurrency(insights.data.deals.projectedProfit)}</p></div>
+            <div className="kpi"><p className="kpi-label">Active deals</p><p className="kpi-value">{insights.data.deals.active}</p></div>
+          </div>
+          <Link to="/insights"><button style={{ marginTop: 12 }}>View insights</button></Link>
+        </section>
+      )}
 
       <div className="layout-grid">
         <section className="panel">
