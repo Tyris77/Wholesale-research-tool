@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "node src/server.js",
     "start": "node src/server.js",
-    "test": "node --import ./test-setup.js --test"
+    "test": "node --import ./test-setup.js --test --test-concurrency=1"
   },
   "dependencies": {
     "cors": "^2.8.5",

@@ -448,6 +448,72 @@ campaignStatusRoute('/api/campaigns/:id/pause', 'paused');
 campaignStatusRoute('/api/campaigns/:id/resume', 'active');
 campaignStatusRoute('/api/campaigns/:id/cancel', 'cancelled');
 
+async function setAppState(key, value) {
+  await dbRun(
+    'INSERT INTO app_state (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value',
+    [key, value],
+  );
+}
+
+async function getAppState(key) {
+  const row = await dbGet('SELECT value FROM app_state WHERE key = ?', [key]);
+  return row ? row.value : '';
+}
+
+async function processDueCampaigns(nowISO, send) {
+  const campaigns = await loadCampaigns("WHERE status = 'active'");
+  let stepsProcessed = 0;
+  for (const campaign of campaigns) {
+    const due = dueSteps(campaign.steps, nowISO);
+    if (due.length === 0) continue;
+    const deal = await dbGet('SELECT * FROM deals WHERE id = ?', [campaign.deal_id]);
+    if (!deal) continue;
+    const buyers = await dbAll('SELECT * FROM buyers');
+    const matches = matchBuyers(deal, buyers);
+    for (const step of due) {
+      const outcome = await emailMatchedBuyers(deal, matches, send);
+      await recordActivities(deal.id, outcome.activities);
+      await dbRun('UPDATE campaign_steps SET status = ? WHERE id = ?', ['sent', step.id]);
+      stepsProcessed += 1;
+    }
+    const remaining = await dbGet(
+      "SELECT COUNT(*) AS n FROM campaign_steps WHERE campaign_id = ? AND status = 'pending'",
+      [campaign.id],
+    );
+    if (remaining.n === 0) await dbRun('UPDATE campaigns SET status = ? WHERE id = ?', ['done', campaign.id]);
+  }
+  return stepsProcessed;
+}
+
+async function maybeSendDigest(today, send, notifyTo) {
+  if (!notifyTo) return false;
+  const last = await getAppState('last_digest_date');
+  if (!shouldSendDigest(last, today)) return false;
+  const sellers = await dbAll('SELECT * FROM sellers');
+  const digest = buildFollowUpDigest(dueSellers(sellers, today));
+  if (!digest) return false;
+  const r = await send({ to: notifyTo, subject: digest.subject, html: digest.html });
+  await recordActivities(null, [{
+    contact_type: 'owner', contact_id: '', contact_name: notifyTo, channel: 'email',
+    subject: digest.subject, status: r.success ? 'sent' : 'failed', detail: r.error || '',
+  }]);
+  await setAppState('last_digest_date', today);
+  return true;
+}
+
+async function runScheduler() {
+  const send = (msg) => sendEmail(msg);
+  const now = new Date();
+  const stepsProcessed = await processDueCampaigns(now.toISOString(), send);
+  const digestSent = await maybeSendDigest(now.toISOString().slice(0, 10), send, config.notifyEmail || config.emailFrom);
+  return { stepsProcessed, digestSent };
+}
+
+app.post('/api/scheduler/run', asyncHandler(async (req, res) => {
+  const result = await runScheduler();
+  res.json({ success: true, ...result });
+}));
+
 app.use(errorHandler);
 
 export default app;
@@ -457,4 +523,7 @@ if (isMain) {
   app.listen(config.port, () => {
     console.log(`Server running on http://localhost:${config.port}`);
   });
+  // Process due campaigns + the daily digest every 60s. Lives here (not on
+  // import) so the test suite never starts the scheduler.
+  setInterval(() => runScheduler().catch((e) => console.error('scheduler error', e)), 60000);
 }
