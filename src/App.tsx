@@ -10,6 +10,7 @@ import { Deals } from './pages/Deals';
 import { DealSheet } from './pages/DealSheet';
 import { Insights } from './pages/Insights';
 import { DocumentGenerator } from './pages/DocumentGenerator';
+import { FollowUps } from './pages/FollowUps';
 import { AIAnalyzer } from './pages/AIAnalyzer';
 import { AdvancedResearch } from './pages/AdvancedResearch';
 
@@ -27,6 +28,7 @@ export default function App() {
         <Route path="deals/:id/sheet" element={<DealSheet />} />
         <Route path="deals/:id/documents" element={<DocumentGenerator />} />
         <Route path="insights" element={<Insights />} />
+        <Route path="follow-ups" element={<FollowUps />} />
         <Route path="ai" element={<AIAnalyzer />} />
         <Route path="research" element={<AdvancedResearch />} />
         <Route path="*" element={<Navigate to="/" replace />} />
