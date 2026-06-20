@@ -10,11 +10,13 @@ export const config = {
   port: Number(process.env.PORT) || 5000,
   corsOrigin: process.env.CORS_ORIGIN || '*',
   nodeEnv: process.env.NODE_ENV || 'development',
+  emailFrom: process.env.EMAIL_FROM || '',
   keys: {
     groq: process.env.GROQ_API_KEY || '',
     fred: process.env.FRED_API_KEY || '',
     census: process.env.CENSUS_API_KEY || '',
     rentcast: process.env.RENTCAST_API_KEY || '',
+    resend: process.env.RESEND_API_KEY || '',
   },
 };
 
@@ -24,5 +26,6 @@ export function integrationStatus(keys = config.keys) {
     fred: isConfigured(keys.fred),
     census: isConfigured(keys.census),
     rentcast: isConfigured(keys.rentcast),
+    resend: isConfigured(keys.resend),
   };
 }
