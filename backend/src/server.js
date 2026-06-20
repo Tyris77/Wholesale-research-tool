@@ -11,6 +11,7 @@ import { estimateArv, medianPricePerSqft, matchBuyers } from './analytics.js';
 import { summarizeDeals, profitByMonth, leadFunnel, matchedDealCount, topMarkets } from './insights.js';
 import { sendEmail } from './email-service.js';
 import { emailMatchedBuyers, dueSellers } from './outreach.js';
+import { campaignRunAts, dueSteps, buildFollowUpDigest, shouldSendDigest } from './scheduling.js';
 import { isConfigured } from './config.js';
 import { asyncHandler, errorHandler, validateBody } from './middleware.js';
 import {
@@ -23,6 +24,7 @@ import {
   dealCreateSchema,
   dealUpdateSchema,
   logContactSchema,
+  campaignCreateSchema,
 } from './schemas.js';
 
 const app = express();
@@ -394,6 +396,57 @@ app.post('/api/sellers/:id/log-contact', validateBody(logContactSchema), asyncHa
   );
   res.json({ success: true });
 }));
+
+// ========== AUTOMATED CAMPAIGNS ==========
+
+async function loadCampaigns(where = '', params = []) {
+  const campaigns = await dbAll(`SELECT * FROM campaigns ${where} ORDER BY created_at DESC`, params);
+  for (const c of campaigns) {
+    c.steps = await dbAll('SELECT * FROM campaign_steps WHERE campaign_id = ? ORDER BY step_no', [c.id]);
+  }
+  return campaigns;
+}
+
+app.post('/api/deals/:id/campaigns', validateBody(campaignCreateSchema), asyncHandler(async (req, res) => {
+  const deal = await dbGet('SELECT * FROM deals WHERE id = ?', [req.params.id]);
+  if (!deal) return res.status(404).json({ success: false, error: 'Deal not found' });
+  const now = new Date().toISOString();
+  const id = uuid();
+  const name = req.body.name || `${deal.name} outreach`;
+  await dbRun(
+    'INSERT INTO campaigns (id, deal_id, name, status, created_at) VALUES (?, ?, ?, ?, ?)',
+    [id, deal.id, name, 'active', now],
+  );
+  const runAts = campaignRunAts(now, req.body.offsets_days);
+  for (let i = 0; i < runAts.length; i++) {
+    await dbRun(
+      'INSERT INTO campaign_steps (id, campaign_id, step_no, run_at, status, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+      [uuid(), id, i + 1, runAts[i], 'pending', now],
+    );
+  }
+  const [campaign] = await loadCampaigns('WHERE id = ?', [id]);
+  res.json(campaign);
+}));
+
+app.get('/api/deals/:id/campaigns', asyncHandler(async (req, res) => {
+  res.json(await loadCampaigns('WHERE deal_id = ?', [req.params.id]));
+}));
+
+app.get('/api/campaigns', asyncHandler(async (req, res) => {
+  res.json(await loadCampaigns());
+}));
+
+function campaignStatusRoute(path, status) {
+  app.post(path, asyncHandler(async (req, res) => {
+    const campaign = await dbGet('SELECT * FROM campaigns WHERE id = ?', [req.params.id]);
+    if (!campaign) return res.status(404).json({ success: false, error: 'Campaign not found' });
+    await dbRun('UPDATE campaigns SET status = ? WHERE id = ?', [status, req.params.id]);
+    res.json({ success: true });
+  }));
+}
+campaignStatusRoute('/api/campaigns/:id/pause', 'paused');
+campaignStatusRoute('/api/campaigns/:id/resume', 'active');
+campaignStatusRoute('/api/campaigns/:id/cancel', 'cancelled');
 
 app.use(errorHandler);
 
