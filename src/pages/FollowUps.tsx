@@ -12,7 +12,10 @@ export function FollowUps() {
 
   const sellers = due.data ?? [];
   const setDraft = (id: string, patch: Partial<{ note: string; next: string }>) =>
-    setDrafts((d) => ({ ...d, [id]: { note: '', next: '', ...d[id], ...patch } }));
+    setDrafts((d) => {
+      const current = d[id] ?? { note: '', next: '' };
+      return { ...d, [id]: { ...current, ...patch } };
+    });
 
   const handleLog = async (id: string) => {
     setError(null);
