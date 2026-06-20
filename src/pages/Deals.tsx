@@ -1,12 +1,18 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { getDeals, updateDeal, deleteDeal, getDealMatches, emailMatchedBuyers, getDealActivities } from '../api/client';
+import { getDeals, updateDeal, deleteDeal, getDealMatches, emailMatchedBuyers, getDealActivities, createCampaign } from '../api/client';
 import { useAsync } from '../hooks/useAsync';
 import { Loading, ErrorBanner, Empty } from '../components/states';
 import { formatCurrency } from '../lib/deal';
 import type { Deal, BuyerMatch, Activity } from '../api/types';
 
 const STATUSES = ['analyzing', 'under_contract', 'closed', 'dead'];
+
+const CADENCES: { label: string; offsets: number[] }[] = [
+  { label: 'Single blast (now)', offsets: [0] },
+  { label: 'Two-touch (now, +3d)', offsets: [0, 3] },
+  { label: 'Three-touch (now, +3d, +7d)', offsets: [0, 3, 7] },
+];
 
 export function Deals() {
   const list = useAsync<Deal[]>(getDeals, true);
@@ -15,6 +21,7 @@ export function Deals() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [emailMsg, setEmailMsg] = useState<Record<string, string>>({});
   const [activities, setActivities] = useState<Record<string, Activity[]>>({});
+  const [automateFor, setAutomateFor] = useState<string | null>(null);
 
   const handleStatus = async (deal: Deal, status: string) => {
     list.setData(deals.map((d) => (d.id === deal.id ? { ...d, status } : d)));
@@ -67,6 +74,18 @@ export function Deals() {
     }
   };
 
+  const handleAutomate = async (deal: Deal, offsets: number[]) => {
+    setActionError(null);
+    if (!window.confirm('Create an automated campaign that emails matched buyers on this schedule? Sends fire automatically.')) return;
+    try {
+      await createCampaign(deal.id, { offsets_days: offsets });
+      setAutomateFor(null);
+      setEmailMsg((m) => ({ ...m, [deal.id]: 'Campaign created — see the Campaigns page.' }));
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : String(e));
+    }
+  };
+
   return (
     <>
       <header className="hero-panel">
@@ -106,10 +125,21 @@ export function Deals() {
                   <button className="ghost-button" onClick={() => handleMatches(deal.id)}>Find buyers</button>
                   <button className="ghost-button" onClick={() => handleEmail(deal)}>Email buyers</button>
                   <button className="ghost-button" onClick={() => handleActivities(deal.id)}>Activity</button>
+                  <button className="ghost-button" onClick={() => setAutomateFor(automateFor === deal.id ? null : deal.id)}>Automate</button>
                   <Link to={`/deals/${deal.id}/sheet`}><button className="ghost-button">Print sheet</button></Link>
                   <Link to={`/deals/${deal.id}/documents`}><button className="ghost-button">Documents</button></Link>
                   <button className="ghost-button" onClick={() => handleDelete(deal.id)}>Delete</button>
                 </div>
+                {automateFor === deal.id && (
+                  <div className="results-card">
+                    <h3>Automate outreach</h3>
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                      {CADENCES.map((c) => (
+                        <button key={c.label} className="ghost-button" onClick={() => handleAutomate(deal, c.offsets)}>{c.label}</button>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 {matches[deal.id] && (
                   <div className="results-card">
                     <h3>Buyer matches ({matches[deal.id].length})</h3>
