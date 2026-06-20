@@ -11,6 +11,7 @@ export const config = {
   corsOrigin: process.env.CORS_ORIGIN || '*',
   nodeEnv: process.env.NODE_ENV || 'development',
   emailFrom: process.env.EMAIL_FROM || '',
+  notifyEmail: process.env.NOTIFY_EMAIL || '',
   keys: {
     groq: process.env.GROQ_API_KEY || '',
     fred: process.env.FRED_API_KEY || '',

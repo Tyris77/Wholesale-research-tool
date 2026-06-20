@@ -150,6 +150,34 @@ export function initDb() {
     `);
     // Follow-up date for sellers (migration for pre-existing DBs).
     db.run('ALTER TABLE sellers ADD COLUMN next_follow_up TEXT', () => {});
+
+    // Campaigns (automated outreach) + their timed steps
+    db.run(`
+      CREATE TABLE IF NOT EXISTS campaigns (
+        id TEXT PRIMARY KEY,
+        deal_id TEXT,
+        name TEXT,
+        status TEXT,
+        created_at TEXT
+      )
+    `);
+    db.run(`
+      CREATE TABLE IF NOT EXISTS campaign_steps (
+        id TEXT PRIMARY KEY,
+        campaign_id TEXT,
+        step_no INTEGER,
+        run_at TEXT,
+        status TEXT,
+        created_at TEXT
+      )
+    `);
+    // Key/value app state (e.g. last digest date)
+    db.run(`
+      CREATE TABLE IF NOT EXISTS app_state (
+        key TEXT PRIMARY KEY,
+        value TEXT
+      )
+    `);
   });
 }
 

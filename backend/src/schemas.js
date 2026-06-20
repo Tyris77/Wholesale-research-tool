@@ -83,3 +83,8 @@ export const logContactSchema = z.object({
   note: z.string().optional(),
   next_follow_up: z.string().optional(),
 });
+
+export const campaignCreateSchema = z.object({
+  name: z.string().optional(),
+  offsets_days: z.array(z.number().int().nonnegative()).min(1).max(10),
+});
