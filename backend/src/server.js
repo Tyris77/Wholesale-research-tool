@@ -4,7 +4,7 @@ import { pathToFileURL } from 'url';
 import { config, integrationStatus } from './config.js';
 import { initDb, db, dbAll, dbGet, dbRun } from './db.js';
 import { v4 as uuid } from 'uuid';
-import { analyzeDealWithAI, scoreSeller } from './ai-service.js';
+import { analyzeDealWithAI, scoreSeller, runAssistant } from './ai-service.js';
 import { getMarketTrends, getNeighborhoodDemographics, geocodeAddress, getLiveComps } from './api-services.js';
 import { computeDeal } from './deal-math.js';
 import { estimateArv, medianPricePerSqft, matchBuyers } from './analytics.js';
@@ -13,6 +13,7 @@ import { sendEmail } from './email-service.js';
 import { emailMatchedBuyers, dueSellers } from './outreach.js';
 import { campaignRunAts, dueSteps, buildFollowUpDigest, shouldSendDigest } from './scheduling.js';
 import { parseResendEvent, summarizeEvents, verifySvixSignature } from './analytics-events.js';
+import { TOOL_DEFINITIONS, buildMessages } from './assistant.js';
 import { isConfigured } from './config.js';
 import { asyncHandler, errorHandler, validateBody } from './middleware.js';
 import {
@@ -26,6 +27,7 @@ import {
   dealUpdateSchema,
   logContactSchema,
   campaignCreateSchema,
+  assistantSchema,
 } from './schemas.js';
 
 const app = express();
@@ -555,6 +557,44 @@ app.get('/api/campaigns/:id/stats', asyncHandler(async (req, res) => {
   );
   const events = await dbAll('SELECT email_id, type FROM email_events');
   res.json(summarizeEvents(rows.map((r) => r.email_id), events));
+}));
+
+// ========== AI ASSISTANT ==========
+
+async function executeAssistantTool(name, args) {
+  switch (name) {
+    case 'get_pipeline_summary': {
+      const [deals, sellers, buyers] = await Promise.all([
+        dbAll('SELECT * FROM deals'), dbAll('SELECT * FROM sellers'), dbAll('SELECT * FROM buyers'),
+      ]);
+      return { ...summarizeDeals(deals), matchedCount: matchedDealCount(deals, buyers), leads: leadFunnel(sellers, buyers) };
+    }
+    case 'list_deals':
+      return await dbAll('SELECT id, name, city, state, deal_type, purchase_price, arv, profit, roi, status FROM deals ORDER BY created_at DESC LIMIT 50');
+    case 'list_buyers':
+      return await dbAll('SELECT id, name, preferred_areas, cash_available, deal_types, avg_deal_size FROM buyers LIMIT 100');
+    case 'list_markets':
+      return await dbAll('SELECT city, state, heat_score, trend FROM markets ORDER BY heat_score DESC');
+    case 'list_followups': {
+      const sellers = await dbAll('SELECT * FROM sellers');
+      const today = new Date().toISOString().slice(0, 10);
+      return dueSellers(sellers, today).map((s) => ({ name: s.name, next_follow_up: s.next_follow_up }));
+    }
+    case 'match_buyers_for_deal': {
+      const deal = await dbGet('SELECT * FROM deals WHERE id = ?', [args.deal_id]);
+      if (!deal) return { error: 'Deal not found' };
+      const buyers = await dbAll('SELECT * FROM buyers');
+      return matchBuyers(deal, buyers).map((m) => ({ buyer: m.buyer.name, score: m.score, reasons: m.reasons }));
+    }
+    default:
+      return { error: `Unknown tool: ${name}` };
+  }
+}
+
+app.post('/api/assistant', validateBody(assistantSchema), asyncHandler(async (req, res) => {
+  const messages = buildMessages(req.body.messages);
+  const result = await runAssistant(messages, { tools: TOOL_DEFINITIONS, executeTool: executeAssistantTool });
+  res.json(result);
 }));
 
 app.use(errorHandler);

@@ -88,3 +88,10 @@ export const campaignCreateSchema = z.object({
   name: z.string().optional(),
   offsets_days: z.array(z.number().int().nonnegative()).min(1).max(10),
 });
+
+export const assistantSchema = z.object({
+  messages: z.array(z.object({
+    role: z.enum(['user', 'assistant']),
+    content: z.string().min(1),
+  })).min(1).max(50),
+});
