@@ -140,6 +140,23 @@ export interface OutreachResult {
   error?: string;
 }
 
+export interface CampaignStep {
+  id: string;
+  campaign_id: string;
+  step_no: number;
+  run_at: string;
+  status: string;
+}
+
+export interface Campaign {
+  id: string;
+  deal_id: string;
+  name: string;
+  status: string;
+  created_at: string;
+  steps: CampaignStep[];
+}
+
 export interface DealInputFields {
   name: string;
   property_address?: string;
