@@ -79,6 +79,7 @@ export function Deals() {
                 <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
                   <button className="ghost-button" onClick={() => handleMatches(deal.id)}>Find buyers</button>
                   <Link to={`/deals/${deal.id}/sheet`}><button className="ghost-button">Print sheet</button></Link>
+                  <Link to={`/deals/${deal.id}/documents`}><button className="ghost-button">Documents</button></Link>
                   <button className="ghost-button" onClick={() => handleDelete(deal.id)}>Delete</button>
                 </div>
                 {matches[deal.id] && (

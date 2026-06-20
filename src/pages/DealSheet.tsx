@@ -40,6 +40,7 @@ export function DealSheet() {
     <div className="deal-sheet">
       <div className="no-print" style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
         <button onClick={() => window.print()}>Print / Save as PDF</button>
+        <Link to={`/deals/${id}/documents`}><button className="ghost-button">Documents</button></Link>
         <Link to="/deals"><button className="ghost-button">Back to deals</button></Link>
       </div>
 
