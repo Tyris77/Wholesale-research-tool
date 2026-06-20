@@ -36,6 +36,7 @@ export interface Seller {
   status: string;
   created_at: string;
   last_contacted?: string;
+  next_follow_up?: string;
 }
 
 export type NewSeller = Omit<Seller, 'id' | 'status' | 'created_at' | 'last_contacted'>;
@@ -114,7 +115,29 @@ export interface GeocodeResult {
 
 export interface Health {
   status: string;
-  integrations: { groq: boolean; fred: boolean; census: boolean; rentcast: boolean };
+  integrations: { groq: boolean; fred: boolean; census: boolean; rentcast: boolean; resend: boolean };
+}
+
+export interface Activity {
+  id: string;
+  deal_id: string | null;
+  contact_type: string;
+  contact_id: string;
+  contact_name: string;
+  channel: string;
+  subject: string;
+  status: string;
+  detail: string;
+  created_at: string;
+}
+
+export interface OutreachResult {
+  success: boolean;
+  sent?: number;
+  failed?: number;
+  skipped?: number;
+  results?: { buyer_id: string; name: string; status: string; error?: string }[];
+  error?: string;
 }
 
 export interface DealInputFields {

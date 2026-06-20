@@ -3,6 +3,7 @@ import type {
   DealInputs, DealAnalysisResult, SellerScoreInput, SellerScoreResult,
   MarketTrend, Neighborhood, GeocodeResult, Health,
   DealInputFields, Deal, ArvEstimate, DealMatches, Insights,
+  Activity, OutreachResult,
 } from './types';
 
 const DEFAULT_BASE_URL = (import.meta.env.VITE_API_URL as string | undefined) ?? 'http://localhost:5000';
@@ -87,3 +88,11 @@ export const estimateArv = (city: string, state: string, sqft: number) => {
 export const getDealMatches = (id: string) => apiFetch<DealMatches>(`/api/deals/${id}/matches`);
 
 export const getInsights = () => apiFetch<Insights>('/api/insights');
+
+export const emailMatchedBuyers = (dealId: string) =>
+  apiFetch<OutreachResult>(`/api/deals/${dealId}/email-buyers`, { method: 'POST' });
+export const getDealActivities = (dealId: string) => apiFetch<Activity[]>(`/api/deals/${dealId}/activities`);
+export const getActivities = () => apiFetch<Activity[]>('/api/activities');
+export const getFollowUps = () => apiFetch<Seller[]>('/api/follow-ups');
+export const logContact = (sellerId: string, body: { note?: string; next_follow_up?: string }) =>
+  apiFetch<{ success: boolean }>(`/api/sellers/${sellerId}/log-contact`, jsonBody(body));
