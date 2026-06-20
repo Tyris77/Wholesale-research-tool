@@ -1,15 +1,26 @@
 import { useState } from 'react';
-import { getCampaigns, pauseCampaign, resumeCampaign, cancelCampaign, runScheduler } from '../api/client';
+import { getCampaigns, pauseCampaign, resumeCampaign, cancelCampaign, runScheduler, getCampaignStats } from '../api/client';
 import { useAsync } from '../hooks/useAsync';
 import { Loading, ErrorBanner, Empty } from '../components/states';
-import type { Campaign } from '../api/types';
+import type { Campaign, CampaignStats } from '../api/types';
 
 export function Campaigns() {
   const list = useAsync<Campaign[]>(getCampaigns, true);
   const [msg, setMsg] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [stats, setStats] = useState<Record<string, CampaignStats>>({});
 
   const campaigns = list.data ?? [];
+
+  const loadStats = async (id: string) => {
+    setError(null);
+    try {
+      const s = await getCampaignStats(id);
+      setStats((prev) => ({ ...prev, [id]: s }));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  };
 
   const act = async (fn: () => Promise<unknown>, after: string) => {
     setError(null); setMsg(null);
@@ -36,7 +47,7 @@ export function Campaigns() {
             <h2>All campaigns ({campaigns.length})</h2>
             <button onClick={() => act(() => runScheduler(), 'Scheduler run complete.')}>Run due now</button>
           </div>
-          <p className="text-muted">Automated sends use Resend. With the test sender <code>onboarding@resend.dev</code>, only your own account email receives mail until you verify a domain.</p>
+          <p className="text-muted">Automated sends use Resend. To collect delivery stats, add a Resend webhook (delivered/opened/clicked/bounced) pointing to <code>&lt;your-server&gt;/api/webhooks/resend</code>. With the test sender <code>onboarding@resend.dev</code>, only your own account email receives mail until you verify a domain.</p>
           {msg && <p className="good-deal">{msg}</p>}
           {error && <ErrorBanner message={error} />}
           {list.loading && <Loading label="Loading campaigns…" />}
@@ -63,7 +74,17 @@ export function Campaigns() {
                   {c.status === 'active' && <button className="ghost-button" onClick={() => act(() => pauseCampaign(c.id), 'Paused.')}>Pause</button>}
                   {c.status === 'paused' && <button className="ghost-button" onClick={() => act(() => resumeCampaign(c.id), 'Resumed.')}>Resume</button>}
                   {(c.status === 'active' || c.status === 'paused') && <button className="ghost-button" onClick={() => act(() => cancelCampaign(c.id), 'Cancelled.')}>Cancel</button>}
+                  <button className="ghost-button" onClick={() => loadStats(c.id)}>Stats</button>
                 </div>
+                {stats[c.id] && (
+                  <div className="kpi-grid" style={{ marginTop: 8 }}>
+                    <div className="kpi"><p className="kpi-label">Sent</p><p className="kpi-value">{stats[c.id].sent}</p></div>
+                    <div className="kpi"><p className="kpi-label">Delivered</p><p className="kpi-value">{stats[c.id].delivered}</p></div>
+                    <div className="kpi"><p className="kpi-label">Opened</p><p className="kpi-value">{stats[c.id].opened}</p></div>
+                    <div className="kpi"><p className="kpi-label">Clicked</p><p className="kpi-value">{stats[c.id].clicked}</p></div>
+                    <div className="kpi"><p className="kpi-label">Bounced</p><p className="kpi-value">{stats[c.id].bounced}</p></div>
+                  </div>
+                )}
               </div>
             ))}
           </div>

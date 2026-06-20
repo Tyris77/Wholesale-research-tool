@@ -3,7 +3,7 @@ import type {
   DealInputs, DealAnalysisResult, SellerScoreInput, SellerScoreResult,
   MarketTrend, Neighborhood, GeocodeResult, Health,
   DealInputFields, Deal, ArvEstimate, DealMatches, Insights,
-  Activity, OutreachResult, Campaign,
+  Activity, OutreachResult, Campaign, CampaignStats,
 } from './types';
 
 const DEFAULT_BASE_URL = (import.meta.env.VITE_API_URL as string | undefined) ?? 'http://localhost:5000';
@@ -106,3 +106,4 @@ export const resumeCampaign = (id: string) => apiFetch<{ success: boolean }>(`/a
 export const cancelCampaign = (id: string) => apiFetch<{ success: boolean }>(`/api/campaigns/${id}/cancel`, { method: 'POST' });
 export const runScheduler = () =>
   apiFetch<{ success: boolean; stepsProcessed: number; digestSent: boolean }>('/api/scheduler/run', { method: 'POST' });
+export const getCampaignStats = (id: string) => apiFetch<CampaignStats>(`/api/campaigns/${id}/stats`);

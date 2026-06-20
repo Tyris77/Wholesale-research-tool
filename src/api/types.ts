@@ -157,6 +157,14 @@ export interface Campaign {
   steps: CampaignStep[];
 }
 
+export interface CampaignStats {
+  sent: number;
+  delivered: number;
+  opened: number;
+  clicked: number;
+  bounced: number;
+}
+
 export interface DealInputFields {
   name: string;
   property_address?: string;
