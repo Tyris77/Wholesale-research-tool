@@ -41,6 +41,13 @@ test('emailMatchedBuyers records a failed send', async () => {
   assert.equal(r.results[0].error, 'nope');
 });
 
+test('emailMatchedBuyers records the Resend email_id on a sent activity', async () => {
+  const matches = [{ buyer: { id: 'b1', name: 'Anna', email: 'anna@x.com' } }];
+  const send = async () => ({ success: true, id: 'email_abc' });
+  const r = await emailMatchedBuyers(deal, matches, send);
+  assert.equal(r.activities[0].email_id, 'email_abc');
+});
+
 test('dueSellers returns sellers due on or before today, sorted ascending', () => {
   const sellers = [
     { id: '1', name: 'A', next_follow_up: '2026-06-20' },

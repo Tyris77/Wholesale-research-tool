@@ -341,13 +341,13 @@ function emailConfigured() {
   return isConfigured(config.keys.resend) && Boolean(config.emailFrom);
 }
 
-async function recordActivities(dealId, activities) {
+async function recordActivities(dealId, activities, campaignId = null) {
   const now = new Date().toISOString();
   for (const a of activities) {
     await dbRun(
-      `INSERT INTO activities (id, deal_id, contact_type, contact_id, contact_name, channel, subject, status, detail, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [uuid(), dealId, a.contact_type, a.contact_id, a.contact_name, a.channel, a.subject, a.status, a.detail, now],
+      `INSERT INTO activities (id, deal_id, campaign_id, contact_type, contact_id, contact_name, channel, subject, status, detail, email_id, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [uuid(), dealId, campaignId, a.contact_type, a.contact_id, a.contact_name, a.channel, a.subject, a.status, a.detail, a.email_id || '', now],
     );
   }
 }
@@ -472,7 +472,7 @@ async function processDueCampaigns(nowISO, send) {
     const matches = matchBuyers(deal, buyers);
     for (const step of due) {
       const outcome = await emailMatchedBuyers(deal, matches, send);
-      await recordActivities(deal.id, outcome.activities);
+      await recordActivities(deal.id, outcome.activities, campaign.id);
       await dbRun('UPDATE campaign_steps SET status = ? WHERE id = ?', ['sent', step.id]);
       stepsProcessed += 1;
     }

@@ -178,6 +178,20 @@ export function initDb() {
         value TEXT
       )
     `);
+    // Email delivery events (Resend webhooks)
+    db.run(`
+      CREATE TABLE IF NOT EXISTS email_events (
+        id TEXT PRIMARY KEY,
+        email_id TEXT,
+        type TEXT,
+        recipient TEXT,
+        created_at TEXT,
+        received_at TEXT
+      )
+    `);
+    // Attribution columns on activities (migration for pre-existing DBs).
+    db.run('ALTER TABLE activities ADD COLUMN email_id TEXT', () => {});
+    db.run('ALTER TABLE activities ADD COLUMN campaign_id TEXT', () => {});
   });
 }
 

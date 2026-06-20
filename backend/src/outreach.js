@@ -35,18 +35,18 @@ export async function emailMatchedBuyers(deal, matches, send) {
     const base = { contact_type: 'buyer', contact_id: buyer.id, contact_name: buyer.name, channel: 'email', subject };
     if (!buyer.email) {
       skipped += 1;
-      activities.push({ ...base, status: 'skipped', detail: 'No email on file' });
+      activities.push({ ...base, status: 'skipped', detail: 'No email on file', email_id: '' });
       results.push({ buyer_id: buyer.id, name: buyer.name, status: 'skipped' });
       continue;
     }
     const r = await send({ to: buyer.email, subject, html });
     if (r.success) {
       sent += 1;
-      activities.push({ ...base, status: 'sent', detail: r.id || '' });
+      activities.push({ ...base, status: 'sent', detail: r.id || '', email_id: r.id || '' });
       results.push({ buyer_id: buyer.id, name: buyer.name, status: 'sent' });
     } else {
       failed += 1;
-      activities.push({ ...base, status: 'failed', detail: r.error || 'send failed' });
+      activities.push({ ...base, status: 'failed', detail: r.error || 'send failed', email_id: '' });
       results.push({ buyer_id: buyer.id, name: buyer.name, status: 'failed', error: r.error });
     }
   }
