@@ -12,6 +12,7 @@ import { summarizeDeals, profitByMonth, leadFunnel, matchedDealCount, topMarkets
 import { sendEmail } from './email-service.js';
 import { emailMatchedBuyers, dueSellers } from './outreach.js';
 import { campaignRunAts, dueSteps, buildFollowUpDigest, shouldSendDigest } from './scheduling.js';
+import { parseResendEvent, summarizeEvents, verifySvixSignature } from './analytics-events.js';
 import { isConfigured } from './config.js';
 import { asyncHandler, errorHandler, validateBody } from './middleware.js';
 import {
@@ -29,7 +30,11 @@ import {
 
 const app = express();
 app.use(cors({ origin: config.corsOrigin }));
-app.use(express.json());
+const jsonParser = express.json();
+app.use((req, res, next) => {
+  if (req.path === '/api/webhooks/resend') return next();
+  return jsonParser(req, res, next);
+});
 
 initDb();
 
@@ -512,6 +517,44 @@ async function runScheduler() {
 app.post('/api/scheduler/run', asyncHandler(async (req, res) => {
   const result = await runScheduler();
   res.json({ success: true, ...result });
+}));
+
+app.post('/api/webhooks/resend', express.raw({ type: '*/*' }), asyncHandler(async (req, res) => {
+  const raw = Buffer.isBuffer(req.body) ? req.body.toString('utf8') : (typeof req.body === 'string' ? req.body : JSON.stringify(req.body || {}));
+  const secret = process.env.RESEND_WEBHOOK_SECRET || '';
+  if (secret) {
+    const ok = verifySvixSignature({
+      secret,
+      id: req.get('svix-id'),
+      timestamp: req.get('svix-timestamp'),
+      signature: req.get('svix-signature'),
+      body: raw,
+    });
+    if (!ok) return res.status(401).json({ success: false, error: 'Invalid signature' });
+  }
+  let payload;
+  try {
+    payload = JSON.parse(raw);
+  } catch {
+    return res.status(400).json({ success: false, error: 'Invalid JSON' });
+  }
+  const evt = parseResendEvent(payload);
+  if (evt) {
+    await dbRun(
+      'INSERT INTO email_events (id, email_id, type, recipient, created_at, received_at) VALUES (?, ?, ?, ?, ?, ?)',
+      [uuid(), evt.email_id, evt.type, evt.recipient, evt.created_at, new Date().toISOString()],
+    );
+  }
+  res.json({ success: true });
+}));
+
+app.get('/api/campaigns/:id/stats', asyncHandler(async (req, res) => {
+  const rows = await dbAll(
+    "SELECT email_id FROM activities WHERE campaign_id = ? AND status = 'sent' AND email_id != ''",
+    [req.params.id],
+  );
+  const events = await dbAll('SELECT email_id, type FROM email_events');
+  res.json(summarizeEvents(rows.map((r) => r.email_id), events));
 }));
 
 app.use(errorHandler);
