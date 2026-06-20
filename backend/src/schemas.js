@@ -21,6 +21,7 @@ export const sellerUpdateSchema = z.object({
   email: optionalEmail,
   status: z.string().min(1),
   motivation: z.string().optional(),
+  next_follow_up: z.string().optional(),
 });
 
 export const buyerCreateSchema = z.object({
@@ -77,3 +78,8 @@ export const dealCreateSchema = z.object({
 });
 
 export const dealUpdateSchema = dealCreateSchema;
+
+export const logContactSchema = z.object({
+  note: z.string().optional(),
+  next_follow_up: z.string().optional(),
+});

@@ -132,6 +132,24 @@ export function initDb() {
     // Migrate deals tables created before deal_type existed. The error callback
     // swallows the "duplicate column name" error on DBs that already have it.
     db.run('ALTER TABLE deals ADD COLUMN deal_type TEXT', () => {});
+
+    // Activities table (outreach + follow-up log)
+    db.run(`
+      CREATE TABLE IF NOT EXISTS activities (
+        id TEXT PRIMARY KEY,
+        deal_id TEXT,
+        contact_type TEXT,
+        contact_id TEXT,
+        contact_name TEXT,
+        channel TEXT,
+        subject TEXT,
+        status TEXT,
+        detail TEXT,
+        created_at TEXT
+      )
+    `);
+    // Follow-up date for sellers (migration for pre-existing DBs).
+    db.run('ALTER TABLE sellers ADD COLUMN next_follow_up TEXT', () => {});
   });
 }
 
