@@ -11,6 +11,7 @@ import { DealSheet } from './pages/DealSheet';
 import { Insights } from './pages/Insights';
 import { DocumentGenerator } from './pages/DocumentGenerator';
 import { FollowUps } from './pages/FollowUps';
+import { Campaigns } from './pages/Campaigns';
 import { AIAnalyzer } from './pages/AIAnalyzer';
 import { AdvancedResearch } from './pages/AdvancedResearch';
 
@@ -29,6 +30,7 @@ export default function App() {
         <Route path="deals/:id/documents" element={<DocumentGenerator />} />
         <Route path="insights" element={<Insights />} />
         <Route path="follow-ups" element={<FollowUps />} />
+        <Route path="campaigns" element={<Campaigns />} />
         <Route path="ai" element={<AIAnalyzer />} />
         <Route path="research" element={<AdvancedResearch />} />
         <Route path="*" element={<Navigate to="/" replace />} />
