@@ -9,6 +9,9 @@ import { getMarketTrends, getNeighborhoodDemographics, geocodeAddress, getLiveCo
 import { computeDeal } from './deal-math.js';
 import { estimateArv, medianPricePerSqft, matchBuyers } from './analytics.js';
 import { summarizeDeals, profitByMonth, leadFunnel, matchedDealCount, topMarkets } from './insights.js';
+import { sendEmail } from './email-service.js';
+import { emailMatchedBuyers, dueSellers } from './outreach.js';
+import { isConfigured } from './config.js';
 import { asyncHandler, errorHandler, validateBody } from './middleware.js';
 import {
   sellerCreateSchema,
@@ -19,6 +22,7 @@ import {
   sellerScoreSchema,
   dealCreateSchema,
   dealUpdateSchema,
+  logContactSchema,
 } from './schemas.js';
 
 const app = express();
@@ -100,12 +104,12 @@ app.post('/api/sellers', validateBody(sellerCreateSchema), (req, res) => {
 });
 
 app.put('/api/sellers/:id', validateBody(sellerUpdateSchema), (req, res) => {
-  const { name, phone, email, status, motivation } = req.body;
+  const { name, phone, email, status, motivation, next_follow_up } = req.body;
   const last_contacted = new Date().toISOString();
-  
+
   db.run(
-    `UPDATE sellers SET name = ?, phone = ?, email = ?, status = ?, motivation = ?, last_contacted = ? WHERE id = ?`,
-    [name, phone, email, status, motivation, last_contacted, req.params.id],
+    `UPDATE sellers SET name = ?, phone = ?, email = ?, status = ?, motivation = ?, next_follow_up = ?, last_contacted = ? WHERE id = ?`,
+    [name, phone, email, status, motivation, next_follow_up || null, last_contacted, req.params.id],
     function(err) {
       if (err) return res.status(500).json({ success: false, error: err.message });
       res.json({ success: true });
@@ -327,6 +331,68 @@ app.get('/api/insights', asyncHandler(async (req, res) => {
     leads: leadFunnel(sellers, buyers),
     markets: { top: topMarkets(markets, 5) },
   });
+}));
+
+// ========== OUTREACH & FOLLOW-UP ==========
+
+function emailConfigured() {
+  return isConfigured(config.keys.resend) && Boolean(config.emailFrom);
+}
+
+async function recordActivities(dealId, activities) {
+  const now = new Date().toISOString();
+  for (const a of activities) {
+    await dbRun(
+      `INSERT INTO activities (id, deal_id, contact_type, contact_id, contact_name, channel, subject, status, detail, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [uuid(), dealId, a.contact_type, a.contact_id, a.contact_name, a.channel, a.subject, a.status, a.detail, now],
+    );
+  }
+}
+
+app.post('/api/deals/:id/email-buyers', asyncHandler(async (req, res) => {
+  const deal = await dbGet('SELECT * FROM deals WHERE id = ?', [req.params.id]);
+  if (!deal) return res.status(404).json({ success: false, error: 'Deal not found' });
+  if (!emailConfigured()) {
+    return res.json({ success: false, error: 'Email is not configured (set RESEND_API_KEY and EMAIL_FROM)' });
+  }
+  const buyers = await dbAll('SELECT * FROM buyers');
+  const matches = matchBuyers(deal, buyers);
+  const outcome = await emailMatchedBuyers(deal, matches, (msg) => sendEmail(msg));
+  await recordActivities(deal.id, outcome.activities);
+  res.json({ success: true, sent: outcome.sent, failed: outcome.failed, skipped: outcome.skipped, results: outcome.results });
+}));
+
+app.get('/api/deals/:id/activities', asyncHandler(async (req, res) => {
+  const rows = await dbAll('SELECT * FROM activities WHERE deal_id = ? ORDER BY created_at DESC', [req.params.id]);
+  res.json(rows);
+}));
+
+app.get('/api/activities', asyncHandler(async (req, res) => {
+  const rows = await dbAll('SELECT * FROM activities ORDER BY created_at DESC LIMIT 50');
+  res.json(rows);
+}));
+
+app.get('/api/follow-ups', asyncHandler(async (req, res) => {
+  const sellers = await dbAll('SELECT * FROM sellers');
+  const today = new Date().toISOString().slice(0, 10);
+  res.json(dueSellers(sellers, today));
+}));
+
+app.post('/api/sellers/:id/log-contact', validateBody(logContactSchema), asyncHandler(async (req, res) => {
+  const seller = await dbGet('SELECT * FROM sellers WHERE id = ?', [req.params.id]);
+  if (!seller) return res.status(404).json({ success: false, error: 'Seller not found' });
+  const now = new Date().toISOString();
+  await dbRun(
+    `INSERT INTO activities (id, deal_id, contact_type, contact_id, contact_name, channel, subject, status, detail, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [uuid(), null, 'seller', seller.id, seller.name, 'note', 'Follow-up contact', 'logged', req.body.note || '', now],
+  );
+  await dbRun(
+    'UPDATE sellers SET last_contacted = ?, next_follow_up = ? WHERE id = ?',
+    [now, req.body.next_follow_up || null, seller.id],
+  );
+  res.json({ success: true });
 }));
 
 app.use(errorHandler);
