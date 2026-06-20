@@ -12,6 +12,7 @@ import { Insights } from './pages/Insights';
 import { DocumentGenerator } from './pages/DocumentGenerator';
 import { FollowUps } from './pages/FollowUps';
 import { Campaigns } from './pages/Campaigns';
+import { Assistant } from './pages/Assistant';
 import { AIAnalyzer } from './pages/AIAnalyzer';
 import { AdvancedResearch } from './pages/AdvancedResearch';
 
@@ -31,6 +32,7 @@ export default function App() {
         <Route path="insights" element={<Insights />} />
         <Route path="follow-ups" element={<FollowUps />} />
         <Route path="campaigns" element={<Campaigns />} />
+        <Route path="assistant" element={<Assistant />} />
         <Route path="ai" element={<AIAnalyzer />} />
         <Route path="research" element={<AdvancedResearch />} />
         <Route path="*" element={<Navigate to="/" replace />} />

@@ -165,6 +165,17 @@ export interface CampaignStats {
   bounced: number;
 }
 
+export interface AssistantMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+export interface AssistantReply {
+  success: boolean;
+  reply?: string;
+  error?: string;
+}
+
 export interface DealInputFields {
   name: string;
   property_address?: string;
