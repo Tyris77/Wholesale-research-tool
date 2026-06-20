@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { getDeals, updateDeal, deleteDeal, getDealMatches } from '../api/client';
+import { getDeals, updateDeal, deleteDeal, getDealMatches, emailMatchedBuyers, getDealActivities } from '../api/client';
 import { useAsync } from '../hooks/useAsync';
 import { Loading, ErrorBanner, Empty } from '../components/states';
 import { formatCurrency } from '../lib/deal';
-import type { Deal, BuyerMatch } from '../api/types';
+import type { Deal, BuyerMatch, Activity } from '../api/types';
 
 const STATUSES = ['analyzing', 'under_contract', 'closed', 'dead'];
 
@@ -13,6 +13,8 @@ export function Deals() {
   const deals = list.data ?? [];
   const [matches, setMatches] = useState<Record<string, BuyerMatch[]>>({});
   const [actionError, setActionError] = useState<string | null>(null);
+  const [emailMsg, setEmailMsg] = useState<Record<string, string>>({});
+  const [activities, setActivities] = useState<Record<string, Activity[]>>({});
 
   const handleStatus = async (deal: Deal, status: string) => {
     list.setData(deals.map((d) => (d.id === deal.id ? { ...d, status } : d)));
@@ -36,6 +38,30 @@ export function Deals() {
     try {
       const res = await getDealMatches(id);
       setMatches((m) => ({ ...m, [id]: res.matches }));
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : String(e));
+    }
+  };
+
+  const handleEmail = async (deal: Deal) => {
+    setActionError(null);
+    try {
+      const res = await getDealMatches(deal.id);
+      const n = res.matches.length;
+      if (n === 0) { setEmailMsg((m) => ({ ...m, [deal.id]: 'No matched buyers to email.' })); return; }
+      if (!window.confirm(`Send this deal to ${n} matched buyer${n === 1 ? '' : 's'}?`)) return;
+      const out = await emailMatchedBuyers(deal.id);
+      if (!out.success) { setEmailMsg((m) => ({ ...m, [deal.id]: out.error || 'Email failed.' })); return; }
+      setEmailMsg((m) => ({ ...m, [deal.id]: `Sent ${out.sent} · skipped ${out.skipped} · failed ${out.failed}` }));
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : String(e));
+    }
+  };
+
+  const handleActivities = async (id: string) => {
+    try {
+      const rows = await getDealActivities(id);
+      setActivities((a) => ({ ...a, [id]: rows }));
     } catch (e) {
       setActionError(e instanceof Error ? e.message : String(e));
     }
@@ -78,6 +104,8 @@ export function Deals() {
                 </div>
                 <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
                   <button className="ghost-button" onClick={() => handleMatches(deal.id)}>Find buyers</button>
+                  <button className="ghost-button" onClick={() => handleEmail(deal)}>Email buyers</button>
+                  <button className="ghost-button" onClick={() => handleActivities(deal.id)}>Activity</button>
                   <Link to={`/deals/${deal.id}/sheet`}><button className="ghost-button">Print sheet</button></Link>
                   <Link to={`/deals/${deal.id}/documents`}><button className="ghost-button">Documents</button></Link>
                   <button className="ghost-button" onClick={() => handleDelete(deal.id)}>Delete</button>
@@ -93,6 +121,21 @@ export function Deals() {
                           <strong>{m.buyer.name}</strong> <span className="text-muted">· score {m.score}</span>
                           <p className="text-muted">{m.reasons.join(' · ')}</p>
                         </div>
+                      ))
+                    )}
+                  </div>
+                )}
+                {emailMsg[deal.id] && <p className="text-muted">✉️ {emailMsg[deal.id]}</p>}
+                {activities[deal.id] && (
+                  <div className="results-card">
+                    <h3>Activity ({activities[deal.id].length})</h3>
+                    {activities[deal.id].length === 0 ? (
+                      <p className="text-muted">No activity yet.</p>
+                    ) : (
+                      activities[deal.id].map((a) => (
+                        <p key={a.id} className="text-muted">
+                          {new Date(a.created_at).toLocaleDateString()} · {a.contact_name} · {a.channel} · {a.status}
+                        </p>
                       ))
                     )}
                   </div>
