@@ -82,3 +82,40 @@ export async function scoreSeller(sellerData, client = createGroqClient()) {
     return { success: false, error: error.message };
   }
 }
+
+// Bounded tool-calling agent loop. The Groq client and executeTool are injected
+// so tests can script the model and never call real Groq.
+export async function runAssistant(
+  messages,
+  { client = createGroqClient(), tools = [], executeTool, maxSteps = 5 } = {},
+) {
+  if (!client) return { success: false, error: NO_KEY_ERROR };
+  const convo = [...messages];
+  try {
+    for (let step = 0; step < maxSteps; step++) {
+      const completion = await client.chat.completions.create({
+        model: MODEL,
+        max_tokens: 800,
+        tools,
+        tool_choice: 'auto',
+        messages: convo,
+      });
+      const msg = completion.choices[0].message;
+      convo.push(msg);
+      const toolCalls = msg.tool_calls || [];
+      if (toolCalls.length === 0) {
+        return { success: true, reply: msg.content || '' };
+      }
+      for (const tc of toolCalls) {
+        let args = {};
+        try { args = JSON.parse(tc.function.arguments || '{}'); } catch { args = {}; }
+        const result = await executeTool(tc.function.name, args);
+        convo.push({ role: 'tool', tool_call_id: tc.id, content: JSON.stringify(result) });
+      }
+    }
+    return { success: true, reply: "I couldn't finish that — try narrowing the question." };
+  } catch (error) {
+    console.error('Assistant error:', error.message);
+    return { success: false, error: error.message };
+  }
+}

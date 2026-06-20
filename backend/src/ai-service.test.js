@@ -1,6 +1,43 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { analyzeDealWithAI, scoreSeller } from './ai-service.js';
+import { analyzeDealWithAI, scoreSeller, runAssistant } from './ai-service.js';
+
+// A fake Groq client whose chat.completions.create returns scripted turns.
+function scriptedClient(turns) {
+  let i = 0;
+  return { chat: { completions: { create: async () => ({ choices: [{ message: turns[i++] }] }) } } };
+}
+
+test('runAssistant returns not-configured when there is no client', async () => {
+  const r = await runAssistant([{ role: 'user', content: 'hi' }], { client: null, tools: [], executeTool: async () => ({}) });
+  assert.equal(r.success, false);
+  assert.match(r.error, /GROQ_API_KEY/);
+});
+
+test('runAssistant executes a requested tool then returns the final reply', async () => {
+  const turns = [
+    { role: 'assistant', content: null, tool_calls: [{ id: 'tc1', function: { name: 'list_deals', arguments: '{}' } }] },
+    { role: 'assistant', content: 'You have 2 deals.' },
+  ];
+  const calls = [];
+  const executeTool = async (name) => { calls.push(name); return [{ id: 'd1' }, { id: 'd2' }]; };
+  const r = await runAssistant([{ role: 'user', content: 'how many deals?' }], {
+    client: scriptedClient(turns), tools: [], executeTool,
+  });
+  assert.equal(r.success, true);
+  assert.equal(r.reply, 'You have 2 deals.');
+  assert.deepEqual(calls, ['list_deals']);
+});
+
+test('runAssistant stops at maxSteps when the model never finishes', async () => {
+  const loopTurn = { role: 'assistant', content: null, tool_calls: [{ id: 'tc', function: { name: 'list_deals', arguments: '{}' } }] };
+  const client = { chat: { completions: { create: async () => ({ choices: [{ message: loopTurn }] }) } } };
+  const r = await runAssistant([{ role: 'user', content: 'loop' }], {
+    client, tools: [], executeTool: async () => ([]), maxSteps: 3,
+  });
+  assert.equal(r.success, true);
+  assert.match(r.reply, /narrow/i);
+});
 
 const DEAL = {
   purchasePrice: 120000, repairBudget: 22000, arv: 185000,
