@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { getDeals, updateDeal, deleteDeal, getDealMatches, emailMatchedBuyers, getDealActivities, createCampaign } from '../api/client';
+import { getDeals, updateDeal, deleteDeal, getDealMatches, emailMatchedBuyers, getDealActivities, createCampaign, createDealLink, revokeDealLink } from '../api/client';
 import { useAsync } from '../hooks/useAsync';
 import { Loading, ErrorBanner, Empty } from '../components/states';
 import { formatCurrency } from '../lib/deal';
@@ -22,6 +22,8 @@ export function Deals() {
   const [emailMsg, setEmailMsg] = useState<Record<string, string>>({});
   const [activities, setActivities] = useState<Record<string, Activity[]>>({});
   const [automateFor, setAutomateFor] = useState<string | null>(null);
+  const [links, setLinks] = useState<Record<string, string | null>>({});
+  const [copied, setCopied] = useState<Record<string, boolean>>({});
 
   const handleStatus = async (deal: Deal, status: string) => {
     list.setData(deals.map((d) => (d.id === deal.id ? { ...d, status } : d)));
@@ -86,6 +88,29 @@ export function Deals() {
     }
   };
 
+  const handleShare = async (deal: Deal) => {
+    setActionError(null);
+    try {
+      const res = await createDealLink(deal.id);
+      setLinks((l) => ({ ...l, [deal.id]: res.slug }));
+      await navigator.clipboard.writeText(`${window.location.origin}/p/${res.slug}`);
+      setCopied((c) => ({ ...c, [deal.id]: true }));
+      setTimeout(() => setCopied((c) => ({ ...c, [deal.id]: false })), 2000);
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : String(e));
+    }
+  };
+
+  const handleRevoke = async (dealId: string) => {
+    setActionError(null);
+    try {
+      await revokeDealLink(dealId);
+      setLinks((l) => ({ ...l, [dealId]: null }));
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : String(e));
+    }
+  };
+
   return (
     <>
       <header className="hero-panel">
@@ -129,6 +154,11 @@ export function Deals() {
                   <Link to={`/deals/${deal.id}/sheet`}><button className="ghost-button">Print sheet</button></Link>
                   <Link to={`/deals/${deal.id}/documents`}><button className="ghost-button">Documents</button></Link>
                   <button className="ghost-button" onClick={() => handleDelete(deal.id)}>Delete</button>
+                  <button className="ghost-button" onClick={() => handleShare(deal)}>Share</button>
+                  {links[deal.id] && (
+                    <button className="ghost-button" onClick={() => handleRevoke(deal.id)}>Revoke link</button>
+                  )}
+                  {copied[deal.id] && <span className="text-muted" style={{ fontSize: '0.85rem' }}>Link copied!</span>}
                 </div>
                 {automateFor === deal.id && (
                   <div className="results-card">
