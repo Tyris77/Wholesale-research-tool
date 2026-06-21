@@ -15,10 +15,12 @@ import { Campaigns } from './pages/Campaigns';
 import { Assistant } from './pages/Assistant';
 import { AIAnalyzer } from './pages/AIAnalyzer';
 import { AdvancedResearch } from './pages/AdvancedResearch';
+import { PublicDeal } from './pages/PublicDeal';
 
 export default function App() {
   return (
     <Routes>
+      <Route path="p/:slug" element={<PublicDeal />} />
       <Route element={<AppLayout />}>
         <Route index element={<Dashboard />} />
         <Route path="calculator" element={<Calculator />} />

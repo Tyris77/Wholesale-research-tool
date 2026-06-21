@@ -356,3 +356,37 @@ button:disabled { opacity: 0.6; cursor: not-allowed; }
 .chat-assistant { background: var(--surface-muted); border: 1px solid var(--line); justify-self: start; }
 .chat-input { display: flex; gap: var(--space-2); }
 .chat-input input { flex: 1; }
+
+/* ---------- Public deal page ---------- */
+.public-deal-page {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: var(--space-4);
+}
+.public-deal-header {
+  background: var(--brand);
+  color: var(--brand-ink);
+  padding: 28px;
+  border-radius: var(--radius-lg);
+  margin-bottom: 28px;
+}
+.public-deal-header h1 { margin: 0; font-size: clamp(1.8rem, 3.5vw, 2.8rem); line-height: 1.05; }
+.public-deal-header p { margin: 8px 0 0; }
+.public-deal-grid {
+  display: grid;
+  gap: var(--space-4);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.public-deal-center {
+  text-align: center;
+  padding: 60px var(--space-4);
+}
+.public-deal-thanks {
+  font-size: 1.1rem;
+  color: var(--good);
+  font-weight: 600;
+  padding: var(--space-3) 0;
+}
+@media (max-width: 760px) {
+  .public-deal-grid { grid-template-columns: 1fr; }
+}
