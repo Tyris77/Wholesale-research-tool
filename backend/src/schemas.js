@@ -95,3 +95,10 @@ export const assistantSchema = z.object({
     content: z.string().min(1),
   })).min(1).max(50),
 });
+
+export const inquirySchema = z.object({
+  name:    z.string().min(1).max(100),
+  email:   z.string().email().optional(),
+  phone:   z.string().min(7).max(20).optional(),
+  message: z.string().max(500).optional(),
+}).refine((d) => d.email || d.phone, { message: 'email or phone required' });

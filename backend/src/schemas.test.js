@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { sellerCreateSchema, buyerCreateSchema, dealAnalysisSchema } from './schemas.js';
+import { sellerCreateSchema, buyerCreateSchema, dealAnalysisSchema, inquirySchema } from './schemas.js';
 
 test('sellerCreateSchema accepts a minimal valid seller', () => {
   const r = sellerCreateSchema.safeParse({ name: 'Jane' });
@@ -34,5 +34,25 @@ test('dealAnalysisSchema rejects a negative price', () => {
 
 test('buyerCreateSchema rejects a non-numeric cash_available', () => {
   const r = buyerCreateSchema.safeParse({ name: 'Bob', cash_available: 'lots' });
+  assert.equal(r.success, false);
+});
+
+test('inquirySchema accepts name + email', () => {
+  const r = inquirySchema.safeParse({ name: 'Jane', email: 'jane@example.com' });
+  assert.equal(r.success, true);
+});
+
+test('inquirySchema accepts name + phone', () => {
+  const r = inquirySchema.safeParse({ name: 'Jane', phone: '555-1234' });
+  assert.equal(r.success, true);
+});
+
+test('inquirySchema rejects missing name', () => {
+  const r = inquirySchema.safeParse({ email: 'jane@example.com' });
+  assert.equal(r.success, false);
+});
+
+test('inquirySchema rejects name with no email or phone', () => {
+  const r = inquirySchema.safeParse({ name: 'Jane' });
   assert.equal(r.success, false);
 });
