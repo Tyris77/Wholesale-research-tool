@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { getDeal, getDealMatches, createDealLink, revokeDealLink } from '../api/client';
+import { getDeal, getDealMatches, createDealLink, revokeDealLink, getDealLink } from '../api/client';
 import { Loading, ErrorBanner } from '../components/states';
 import { formatCurrency } from '../lib/deal';
 import type { Deal, BuyerMatch } from '../api/types';
@@ -18,8 +18,18 @@ export function DealSheet() {
     if (!id) return;
     let active = true;
     setLoading(true);
-    Promise.all([getDeal(id), getDealMatches(id).catch(() => ({ matches: [] }))])
-      .then(([d, m]) => { if (active) { setDeal(d); setMatches(m.matches || []); } })
+    Promise.all([
+      getDeal(id),
+      getDealMatches(id).catch(() => ({ matches: [] })),
+      getDealLink(id).catch(() => null),
+    ])
+      .then(([d, m, l]) => {
+        if (active) {
+          setDeal(d);
+          setMatches(m.matches || []);
+          if (l) setLinkSlug(l.slug);
+        }
+      })
       .catch((e) => active && setError(e instanceof Error ? e.message : String(e)))
       .finally(() => active && setLoading(false));
     return () => { active = false; };

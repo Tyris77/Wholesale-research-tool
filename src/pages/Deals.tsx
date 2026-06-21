@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { getDeals, updateDeal, deleteDeal, getDealMatches, emailMatchedBuyers, getDealActivities, createCampaign, createDealLink, revokeDealLink } from '../api/client';
+import { getDeals, updateDeal, deleteDeal, getDealMatches, emailMatchedBuyers, getDealActivities, createCampaign, createDealLink, revokeDealLink, getDealLink } from '../api/client';
 import { useAsync } from '../hooks/useAsync';
 import { Loading, ErrorBanner, Empty } from '../components/states';
 import { formatCurrency } from '../lib/deal';
@@ -110,6 +110,18 @@ export function Deals() {
       setActionError(e instanceof Error ? e.message : String(e));
     }
   };
+
+  // Hydrate existing active link slugs on mount
+  useEffect(() => {
+    if (!list.data) return;
+    list.data.forEach((deal) => {
+      getDealLink(deal.id)
+        .then((l) => {
+          if (l) setLinks((prev) => ({ ...prev, [deal.id]: l.slug }));
+        })
+        .catch(() => {});
+    });
+  }, [list.data]);
 
   return (
     <>

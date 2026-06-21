@@ -607,6 +607,7 @@ app.post('/api/deals/:id/link', asyncHandler(async (req, res) => {
   const slug = randomBytes(4).toString('hex');
   const now = new Date().toISOString();
   await dbRun('DELETE FROM deal_links WHERE deal_id = ?', [deal.id]);
+  // Collision probability ~1-in-4B at this scale; retry not implemented.
   await dbRun(
     'INSERT INTO deal_links (slug, deal_id, active, view_count, created_at) VALUES (?, ?, 1, 0, ?)',
     [slug, deal.id, now],
@@ -621,6 +622,11 @@ app.delete('/api/deals/:id/link', asyncHandler(async (req, res) => {
   res.json({ success: true });
 }));
 
+app.get('/api/deals/:id/link', asyncHandler(async (req, res) => {
+  const link = await dbGet('SELECT slug FROM deal_links WHERE deal_id = ? AND active = 1', [req.params.id]);
+  res.json(link ? { slug: link.slug } : null);
+}));
+
 app.get('/api/public/deals/:slug', asyncHandler(async (req, res) => {
   const link = await dbGet('SELECT * FROM deal_links WHERE slug = ?', [req.params.slug]);
   if (!link || !link.active) return res.status(404).json({ success: false, error: 'Deal not found' });
@@ -629,8 +635,8 @@ app.get('/api/public/deals/:slug', asyncHandler(async (req, res) => {
     [link.deal_id],
   );
   if (!deal) return res.status(404).json({ success: false, error: 'Deal not found' });
-  await dbRun('UPDATE deal_links SET view_count = view_count + 1 WHERE slug = ?', [req.params.slug]);
   res.json(deal);
+  dbRun('UPDATE deal_links SET view_count = view_count + 1 WHERE slug = ?', [req.params.slug]).catch(() => {});
 }));
 
 app.post('/api/public/deals/:slug/inquire', validateBody(inquirySchema), asyncHandler(async (req, res) => {

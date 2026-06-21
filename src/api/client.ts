@@ -118,6 +118,9 @@ export const createDealLink = (id: string) =>
 export const revokeDealLink = (id: string) =>
   apiFetch<{ success: boolean }>(`/api/deals/${id}/link`, { method: 'DELETE' });
 
+export const getDealLink = (id: string) =>
+  apiFetch<{ slug: string } | null>(`/api/deals/${id}/link`);
+
 export const getPublicDeal = (slug: string) =>
   apiFetch<PublicDeal>(`/api/public/deals/${slug}`);
 

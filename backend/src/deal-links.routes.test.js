@@ -93,3 +93,19 @@ test('POST /api/public/deals/:slug/inquire returns 404 on inactive slug', async 
     .send({ name: 'Late Buyer', phone: '555-1234' });
   assert.equal(res.status, 404);
 });
+
+test('GET /api/deals/:id/link returns active slug', async () => {
+  // Re-activate a link first
+  const linkRes = await request(app).post(`/api/deals/${dealId}/link`);
+  slug = linkRes.body.slug;
+  const res = await request(app).get(`/api/deals/${dealId}/link`);
+  assert.equal(res.status, 200);
+  assert.equal(res.body.slug, slug);
+});
+
+test('GET /api/deals/:id/link returns null when no active link', async () => {
+  await request(app).delete(`/api/deals/${dealId}/link`);
+  const res = await request(app).get(`/api/deals/${dealId}/link`);
+  assert.equal(res.status, 200);
+  assert.equal(res.body, null);
+});
