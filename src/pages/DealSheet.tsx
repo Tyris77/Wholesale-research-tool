@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { getDeal, getDealMatches } from '../api/client';
+import { getDeal, getDealMatches, createDealLink, revokeDealLink } from '../api/client';
 import { Loading, ErrorBanner } from '../components/states';
 import { formatCurrency } from '../lib/deal';
 import type { Deal, BuyerMatch } from '../api/types';
@@ -11,6 +11,8 @@ export function DealSheet() {
   const [matches, setMatches] = useState<BuyerMatch[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [linkSlug, setLinkSlug] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -22,6 +24,29 @@ export function DealSheet() {
       .finally(() => active && setLoading(false));
     return () => { active = false; };
   }, [id]);
+
+  const handleShare = async () => {
+    if (!id) return;
+    try {
+      const res = await createDealLink(id);
+      setLinkSlug(res.slug);
+      await navigator.clipboard.writeText(`${window.location.origin}/p/${res.slug}`);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  };
+
+  const handleRevoke = async () => {
+    if (!id) return;
+    try {
+      await revokeDealLink(id);
+      setLinkSlug(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  };
 
   if (loading) return <Loading label="Loading deal sheet…" />;
   if (error) return <ErrorBanner message={error} />;
@@ -38,10 +63,15 @@ export function DealSheet() {
 
   return (
     <div className="deal-sheet">
-      <div className="no-print" style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+      <div className="no-print" style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
         <button onClick={() => window.print()}>Print / Save as PDF</button>
         <Link to={`/deals/${id}/documents`}><button className="ghost-button">Documents</button></Link>
         <Link to="/deals"><button className="ghost-button">Back to deals</button></Link>
+        <button className="ghost-button" onClick={handleShare}>Share</button>
+        {linkSlug && (
+          <button className="ghost-button" onClick={handleRevoke}>Revoke link</button>
+        )}
+        {copied && <span style={{ fontSize: '0.85rem', color: 'var(--ink-soft)' }}>Link copied!</span>}
       </div>
 
       <header className="hero-panel">
