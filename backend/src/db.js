@@ -5,7 +5,7 @@ import { v4 as uuid } from 'uuid';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-const dbPath = join(__dirname, '..', 'wholesale.db');
+const dbPath = process.env.DATABASE_URL || join(__dirname, '..', 'wholesale.db');
 
 export const db = new sqlite3.Database(dbPath, (err) => {
   if (err) console.error('Database error:', err);
