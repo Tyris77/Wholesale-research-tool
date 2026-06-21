@@ -192,6 +192,29 @@ export function initDb() {
     // Attribution columns on activities (migration for pre-existing DBs).
     db.run('ALTER TABLE activities ADD COLUMN email_id TEXT', () => {});
     db.run('ALTER TABLE activities ADD COLUMN campaign_id TEXT', () => {});
+
+    // Shareable deal links
+    db.run(`
+      CREATE TABLE IF NOT EXISTS deal_links (
+        slug       TEXT PRIMARY KEY,
+        deal_id    TEXT NOT NULL,
+        active     INTEGER NOT NULL DEFAULT 1,
+        view_count INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL,
+        UNIQUE(deal_id)
+      )
+    `);
+    db.run(`
+      CREATE TABLE IF NOT EXISTS deal_link_inquiries (
+        id         TEXT PRIMARY KEY,
+        slug       TEXT NOT NULL,
+        name       TEXT NOT NULL,
+        email      TEXT,
+        phone      TEXT,
+        message    TEXT,
+        created_at TEXT NOT NULL
+      )
+    `);
   });
 }
 
