@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
-import { pathToFileURL } from 'url';
+import { pathToFileURL, fileURLToPath } from 'url';
+import { join, dirname } from 'path';
 import { randomBytes } from 'node:crypto';
 import { config, integrationStatus } from './config.js';
 import { initDb, db, dbAll, dbGet, dbRun } from './db.js';
@@ -655,6 +656,16 @@ app.post('/api/public/deals/:slug/inquire', validateBody(inquirySchema), asyncHa
   );
   res.json({ success: true });
 }));
+
+if (config.nodeEnv === 'production') {
+  const __filename = fileURLToPath(import.meta.url);
+  const distPath = join(dirname(__filename), '..', '..', 'dist');
+  app.use(express.static(distPath));
+  app.get('*', (req, res) => {
+    if (req.path.startsWith('/api/')) return res.status(404).json({ success: false, error: 'Not found' });
+    res.sendFile(join(distPath, 'index.html'));
+  });
+}
 
 app.use(errorHandler);
 
