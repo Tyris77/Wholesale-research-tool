@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import { pathToFileURL } from 'url';
+import { randomBytes } from 'node:crypto';
 import { config, integrationStatus } from './config.js';
 import { initDb, db, dbAll, dbGet, dbRun } from './db.js';
 import { v4 as uuid } from 'uuid';
@@ -28,6 +29,7 @@ import {
   logContactSchema,
   campaignCreateSchema,
   assistantSchema,
+  inquirySchema,
 } from './schemas.js';
 
 const app = express();
@@ -595,6 +597,57 @@ app.post('/api/assistant', validateBody(assistantSchema), asyncHandler(async (re
   const messages = buildMessages(req.body.messages);
   const result = await runAssistant(messages, { tools: TOOL_DEFINITIONS, executeTool: executeAssistantTool });
   res.json(result);
+}));
+
+// ========== SHAREABLE DEAL LINKS ==========
+
+app.post('/api/deals/:id/link', asyncHandler(async (req, res) => {
+  const deal = await dbGet('SELECT id FROM deals WHERE id = ?', [req.params.id]);
+  if (!deal) return res.status(404).json({ success: false, error: 'Deal not found' });
+  const slug = randomBytes(4).toString('hex');
+  const now = new Date().toISOString();
+  await dbRun('DELETE FROM deal_links WHERE deal_id = ?', [deal.id]);
+  await dbRun(
+    'INSERT INTO deal_links (slug, deal_id, active, view_count, created_at) VALUES (?, ?, 1, 0, ?)',
+    [slug, deal.id, now],
+  );
+  res.json({ slug, url: `/p/${slug}` });
+}));
+
+app.delete('/api/deals/:id/link', asyncHandler(async (req, res) => {
+  const link = await dbGet('SELECT slug FROM deal_links WHERE deal_id = ? AND active = 1', [req.params.id]);
+  if (!link) return res.status(404).json({ success: false, error: 'No active link found' });
+  await dbRun('UPDATE deal_links SET active = 0 WHERE deal_id = ?', [req.params.id]);
+  res.json({ success: true });
+}));
+
+app.get('/api/public/deals/:slug', asyncHandler(async (req, res) => {
+  const link = await dbGet('SELECT * FROM deal_links WHERE slug = ?', [req.params.slug]);
+  if (!link || !link.active) return res.status(404).json({ success: false, error: 'Deal not found' });
+  const deal = await dbGet(
+    'SELECT name, city, state, deal_type, purchase_price, arv, profit, roi FROM deals WHERE id = ?',
+    [link.deal_id],
+  );
+  if (!deal) return res.status(404).json({ success: false, error: 'Deal not found' });
+  await dbRun('UPDATE deal_links SET view_count = view_count + 1 WHERE slug = ?', [req.params.slug]);
+  res.json(deal);
+}));
+
+app.post('/api/public/deals/:slug/inquire', validateBody(inquirySchema), asyncHandler(async (req, res) => {
+  const link = await dbGet('SELECT * FROM deal_links WHERE slug = ? AND active = 1', [req.params.slug]);
+  if (!link) return res.status(404).json({ success: false, error: 'Deal not found' });
+  const { name, email, phone, message } = req.body;
+  const now = new Date().toISOString();
+  await dbRun(
+    'INSERT INTO deal_link_inquiries (id, slug, name, email, phone, message, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+    [uuid(), req.params.slug, name, email || null, phone || null, message || null, now],
+  );
+  const contact = email || phone;
+  await dbRun(
+    'INSERT INTO activities (id, deal_id, contact_type, contact_id, contact_name, channel, subject, status, detail, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    [uuid(), link.deal_id, 'buyer', null, name, 'inquiry', 'Deal inquiry', 'received', `Inquiry from ${name} (${contact})`, now],
+  );
+  res.json({ success: true });
 }));
 
 app.use(errorHandler);
