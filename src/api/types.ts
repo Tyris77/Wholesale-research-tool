@@ -253,3 +253,26 @@ export interface DealMatches {
   success: boolean;
   matches: BuyerMatch[];
 }
+
+export interface PublicDeal {
+  name: string;
+  city: string;
+  state: string;
+  deal_type: string;
+  purchase_price: number;
+  arv: number;
+  profit: number;
+  roi: number;
+}
+
+export interface InquiryBody {
+  name: string;
+  email?: string;
+  phone?: string;
+  message?: string;
+}
+
+export interface DealLinkResult {
+  slug: string;
+  url: string;
+}

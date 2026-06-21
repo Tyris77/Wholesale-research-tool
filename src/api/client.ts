@@ -4,6 +4,7 @@ import type {
   MarketTrend, Neighborhood, GeocodeResult, Health,
   DealInputFields, Deal, ArvEstimate, DealMatches, Insights,
   Activity, OutreachResult, Campaign, CampaignStats, AssistantMessage, AssistantReply,
+  PublicDeal, InquiryBody, DealLinkResult,
 } from './types';
 
 const DEFAULT_BASE_URL = (import.meta.env.VITE_API_URL as string | undefined) ?? 'http://localhost:5000';
@@ -110,3 +111,15 @@ export const getCampaignStats = (id: string) => apiFetch<CampaignStats>(`/api/ca
 
 export const askAssistant = (messages: AssistantMessage[]) =>
   apiFetch<AssistantReply>('/api/assistant', jsonBody({ messages }));
+
+export const createDealLink = (id: string) =>
+  apiFetch<DealLinkResult>(`/api/deals/${id}/link`, { method: 'POST' });
+
+export const revokeDealLink = (id: string) =>
+  apiFetch<{ success: boolean }>(`/api/deals/${id}/link`, { method: 'DELETE' });
+
+export const getPublicDeal = (slug: string) =>
+  apiFetch<PublicDeal>(`/api/public/deals/${slug}`);
+
+export const submitInquiry = (slug: string, body: InquiryBody) =>
+  apiFetch<{ success: boolean }>(`/api/public/deals/${slug}/inquire`, jsonBody(body));
