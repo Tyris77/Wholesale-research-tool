@@ -1,6 +1,9 @@
-import { test } from 'node:test';
+import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
+import { db } from './db.js';
 import { scoreProperty, classifyLead, isAbsentee, isOutOfState } from './property-intel.js';
+
+after(() => new Promise((resolve) => db.close(() => resolve())));
 
 test('scoreProperty: tax delinquent only = 40', () => {
   assert.equal(scoreProperty(['tax_delinquent']), 40);
@@ -75,7 +78,7 @@ test('isOutOfState: FL owner = true', () => {
   assert.equal(isOutOfState('FL'), true);
 });
 
-import { buildSignals, deduplicateByParcelId } from './property-intel.js';
+import { buildSignals, deduplicateByParcelId, runPropertyIntelScan, buildDigestEmail } from './property-intel.js';
 
 test('buildSignals: tax delinquent + absentee + out_of_state + vacant + code_violation', () => {
   const property = {
@@ -117,4 +120,20 @@ test('deduplicateByParcelId: keeps last occurrence per parcel', () => {
   const map = deduplicateByParcelId(records);
   assert.equal(map.size, 2);
   assert.equal(map.get('X1').address, 'second');
+});
+
+test('buildDigestEmail: returns null when no hot leads', () => {
+  assert.equal(buildDigestEmail([]), null);
+});
+
+test('buildDigestEmail: returns subject + html for hot leads', () => {
+  const leads = [
+    { address: '100 MAIN ST NW', ward: 'Ward 1', score: 95, signals: ['tax_delinquent', 'vacant'] },
+    { address: '200 ELM ST SE', ward: 'Ward 8', score: 80, signals: ['absentee_owner'] },
+  ];
+  const result = buildDigestEmail(leads);
+  assert.ok(result.subject.includes('2'));
+  assert.ok(result.html.includes('100 MAIN ST NW'));
+  assert.ok(result.html.includes('Ward 1'));
+  assert.ok(result.html.includes('95'));
 });

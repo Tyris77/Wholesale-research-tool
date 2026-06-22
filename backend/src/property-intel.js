@@ -140,3 +140,138 @@ export function deduplicateByParcelId(records) {
   for (const r of records) map.set(r.parcelId, r);
   return map;
 }
+
+export function buildDigestEmail(hotLeads) {
+  if (!hotLeads || hotLeads.length === 0) return null;
+  const top5 = hotLeads.slice(0, 5);
+  const rows = top5.map((l) => {
+    const sigs = Array.isArray(l.signals) ? l.signals : JSON.parse(l.signals ?? '[]');
+    return `<tr>
+      <td>${l.address}</td>
+      <td>${l.ward ?? '—'}</td>
+      <td><strong>${l.score}</strong></td>
+      <td>${sigs.join(', ')}</td>
+    </tr>`;
+  }).join('');
+  return {
+    subject: `🏠 ${hotLeads.length} new hot lead${hotLeads.length === 1 ? '' : 's'} found in DC — ${new Date().toLocaleDateString('en-US')}`,
+    html: `
+      <h2>DC Property Intel — Daily Digest</h2>
+      <p>${hotLeads.length} hot lead${hotLeads.length === 1 ? '' : 's'} found today (score ≥ 75).</p>
+      <table border="1" cellpadding="6" cellspacing="0">
+        <thead><tr><th>Address</th><th>Ward</th><th>Score</th><th>Signals</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+      <p>Log in to Lead Finder to review and promote leads to your Sellers list.</p>
+    `,
+  };
+}
+
+async function upsertLead(property, signals, score, now) {
+  await dbRun(
+    `INSERT INTO property_leads (parcel_id, address, ward, owner_name, owner_address, assessed_value, score, signals, status, last_scanned_at, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'new', ?, ?)
+     ON CONFLICT(parcel_id) DO UPDATE SET
+       score = excluded.score,
+       signals = excluded.signals,
+       owner_name = excluded.owner_name,
+       owner_address = excluded.owner_address,
+       assessed_value = excluded.assessed_value,
+       last_scanned_at = excluded.last_scanned_at
+     WHERE status != 'dismissed'`,
+    [
+      property.parcelId, property.address, property.ward,
+      property.ownerName, property.ownerAddress, property.assessedValue,
+      score, JSON.stringify(signals), now, now,
+    ],
+  );
+  await dbRun('DELETE FROM lead_signals WHERE parcel_id = ? AND scanned_at = ?', [property.parcelId, now]);
+  for (const signal of signals) {
+    await dbRun(
+      'INSERT INTO lead_signals (id, parcel_id, signal_type, signal_value, points_awarded, scanned_at) VALUES (?, ?, ?, ?, ?, ?)',
+      [uuid(), property.parcelId, signal, null, SIGNAL_POINTS[signal] ?? 0, now],
+    );
+  }
+}
+
+async function promoteHotLeads(hotParcelIds, now) {
+  let promoted = 0;
+  for (const parcelId of hotParcelIds) {
+    const lead = await dbGet('SELECT * FROM property_leads WHERE parcel_id = ?', [parcelId]);
+    if (!lead || lead.promoted_seller_id) continue;
+    const arv = Math.round((lead.assessed_value ?? 0) * 1.2);
+    const signals = JSON.parse(lead.signals ?? '[]');
+    const sellerId = uuid();
+    await dbRun(
+      `INSERT INTO sellers (id, name, phone, email, property_address, property_city, property_state, motivation, status, created_at, last_contacted)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'new', ?, ?)`,
+      [
+        sellerId,
+        lead.owner_name || 'Unknown Owner',
+        null, null,
+        lead.address, 'Washington', 'DC',
+        `Score: ${lead.score}/100 — Signals: ${signals.join(', ')}. ARV est. $${arv.toLocaleString()}.`,
+        now, null,
+      ],
+    );
+    await dbRun(
+      "UPDATE property_leads SET promoted_seller_id = ?, status = 'promoted' WHERE parcel_id = ?",
+      [sellerId, parcelId],
+    );
+    promoted++;
+  }
+  return promoted;
+}
+
+export async function runPropertyIntelScan() {
+  const now = new Date().toISOString();
+  const counts = { total: 0, hot: 0, warm: 0, cold: 0, promoted: 0, errors: [] };
+
+  let properties, vacantSet, violationsSet;
+  try {
+    [properties, vacantSet, violationsSet] = await Promise.all([
+      fetchPropertyOwnership(),
+      fetchVacantBlighted(),
+      fetchCodeViolations(),
+    ]);
+  } catch (err) {
+    counts.errors.push(`API fetch failed: ${err.message}`);
+    console.error('property-intel: fetch failed', err);
+    return counts;
+  }
+
+  const unique = deduplicateByParcelId(properties);
+  counts.total = unique.size;
+
+  const hotParcelIds = [];
+  for (const property of unique.values()) {
+    const signals = buildSignals(property, vacantSet, violationsSet);
+    const score = scoreProperty(signals);
+    const tier = classifyLead(score);
+    if (tier === 'cold') { counts.cold++; continue; }
+    try {
+      await upsertLead(property, signals, score, now);
+      if (tier === 'hot') { counts.hot++; hotParcelIds.push(property.parcelId); }
+      else counts.warm++;
+    } catch (err) {
+      counts.errors.push(`upsert ${property.parcelId}: ${err.message}`);
+    }
+  }
+
+  counts.promoted = await promoteHotLeads(hotParcelIds, now);
+
+  if (hotParcelIds.length > 0 && config.notifyEmail) {
+    const hotLeads = await dbAll(
+      `SELECT * FROM property_leads WHERE parcel_id IN (${hotParcelIds.slice(0, 5).map(() => '?').join(',')}) ORDER BY score DESC`,
+      hotParcelIds.slice(0, 5),
+    );
+    const email = buildDigestEmail(hotLeads);
+    if (email) {
+      await sendEmail({ to: config.notifyEmail, subject: email.subject, html: email.html })
+        .catch((e) => console.error('digest email failed', e));
+    }
+  }
+
+  console.log(`property-intel scan complete: ${JSON.stringify(counts)}`);
+  return counts;
+}
