@@ -16,6 +16,7 @@ import { Assistant } from './pages/Assistant';
 import { AIAnalyzer } from './pages/AIAnalyzer';
 import { AdvancedResearch } from './pages/AdvancedResearch';
 import { PublicDeal } from './pages/PublicDeal';
+import LeadFinder from './pages/LeadFinder';
 
 export default function App() {
   return (
@@ -27,6 +28,7 @@ export default function App() {
         <Route path="markets" element={<MarketHeatmap />} />
         <Route path="properties" element={<PropertySearch />} />
         <Route path="sellers" element={<SellerLeadManager />} />
+        <Route path="leads" element={<LeadFinder />} />
         <Route path="buyers" element={<BuyerDirectory />} />
         <Route path="deals" element={<Deals />} />
         <Route path="deals/:id/sheet" element={<DealSheet />} />
