@@ -1,11 +1,17 @@
 import sqlite3 from 'sqlite3';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import { mkdirSync } from 'fs';
 import { v4 as uuid } from 'uuid';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const dbPath = process.env.DATABASE_URL || join(__dirname, '..', 'wholesale.db');
+
+// Ensure the DB's directory exists so a persistent path like
+// DATABASE_URL=/data/wholesale.db (a mounted Railway volume) works instead of
+// crashing when the directory isn't there yet.
+try { mkdirSync(dirname(dbPath), { recursive: true }); } catch { /* already exists */ }
 
 export const db = new sqlite3.Database(dbPath, (err) => {
   if (err) console.error('Database error:', err);
