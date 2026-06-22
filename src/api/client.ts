@@ -4,7 +4,7 @@ import type {
   MarketTrend, Neighborhood, GeocodeResult, Health,
   DealInputFields, Deal, ArvEstimate, DealMatches, Insights,
   Activity, OutreachResult, Campaign, CampaignStats, AssistantMessage, AssistantReply,
-  PublicDeal, InquiryBody, DealLinkResult, PropertyLead,
+  PublicDeal, InquiryBody, DealLinkResult, PropertyLead, CashBuyer,
 } from './types';
 
 const DEFAULT_BASE_URL = (import.meta.env.VITE_API_URL as string | undefined) ?? '';
@@ -156,4 +156,22 @@ export async function dismissPropertyLead(
 
 export async function runPropertyIntelScan(): Promise<{ success: boolean; message: string }> {
   return apiFetch('/api/property-intel/run', { method: 'POST' });
+}
+
+export async function getCashBuyers(
+  filters: { minPurchases?: number; saved?: boolean } = {},
+): Promise<CashBuyer[]> {
+  const params = new URLSearchParams();
+  if (filters.minPurchases !== undefined) params.set('minPurchases', String(filters.minPurchases));
+  if (filters.saved) params.set('saved', 'true');
+  const qs = params.toString();
+  return apiFetch<CashBuyer[]>(`/api/cash-buyers${qs ? `?${qs}` : ''}`);
+}
+
+export async function findCashBuyers(): Promise<{ success: boolean; message: string }> {
+  return apiFetch('/api/cash-buyers/find', { method: 'POST' });
+}
+
+export async function saveCashBuyer(id: string): Promise<{ success: boolean }> {
+  return apiFetch(`/api/cash-buyers/${encodeURIComponent(id)}/save`, { method: 'POST' });
 }

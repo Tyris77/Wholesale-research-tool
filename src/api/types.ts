@@ -297,3 +297,18 @@ export interface PropertyLead {
     points_awarded: number;
   }>;
 }
+
+export interface CashBuyer {
+  id: string;
+  name: string;
+  mailing_address: string | null;
+  buyer_state: string | null;
+  purchase_count: number;
+  total_spend: number;
+  avg_price: number;
+  zips: string; // JSON array string of property ZIP codes
+  last_purchase_date: string | null;
+  saved: number; // 0 | 1
+  last_seen_at: string;
+  created_at: string;
+}

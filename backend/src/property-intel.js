@@ -124,7 +124,7 @@ export async function discoverItspeQueryUrl() {
 // Page through an ArcGIS query endpoint. Uses the server's own
 // `exceededTransferLimit` flag (rather than a fixed page size) so it works
 // whether the service caps results at 1000, 2000, or anything else.
-async function fetchAllPages(queryUrl, where, outFields) {
+export async function fetchAllPages(queryUrl, where, outFields) {
   const records = [];
   let offset = 0;
   while (true) {

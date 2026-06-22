@@ -33,6 +33,7 @@ import {
   inquirySchema,
 } from './schemas.js';
 import { runPropertyIntelScan, diagnoseScan } from './property-intel.js';
+import { findCashBuyers } from './cash-buyers.js';
 
 const app = express();
 app.use(cors({ origin: config.corsOrigin }));
@@ -528,6 +529,15 @@ async function runScheduler() {
     }
   }
 
+  // Refresh the cash-buyer list weekly (Mondays at 9am UTC).
+  if (now.getUTCDay() === 1 && hour === 9) {
+    const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    const lastBuyers = await dbGet('SELECT MAX(last_seen_at) as last FROM cash_buyers');
+    if (!lastBuyers?.last || lastBuyers.last < weekAgo) {
+      findCashBuyers().catch((e) => console.error('cash buyers scheduler error', e));
+    }
+  }
+
   return { stepsProcessed, digestSent };
 }
 
@@ -727,6 +737,44 @@ app.post('/api/property-intel/run', asyncHandler(async (req, res) => {
 app.get('/api/property-intel/diag', asyncHandler(async (req, res) => {
   const report = await diagnoseScan();
   res.json(report);
+}));
+
+// Cash Buyer routes
+app.get('/api/cash-buyers', asyncHandler(async (req, res) => {
+  const { minPurchases, saved } = req.query;
+  let sql = 'SELECT * FROM cash_buyers WHERE 1=1';
+  const params = [];
+  if (minPurchases) { sql += ' AND purchase_count >= ?'; params.push(Number(minPurchases)); }
+  if (saved === 'true') { sql += ' AND saved = 1'; }
+  sql += ' ORDER BY purchase_count DESC, total_spend DESC LIMIT 500';
+  const buyers = await dbAll(sql, params);
+  res.json(buyers);
+}));
+
+app.post('/api/cash-buyers/find', asyncHandler(async (req, res) => {
+  res.json({ success: true, message: 'Searching DC sales records — cash buyers appear in 1-2 minutes' });
+  findCashBuyers().catch((e) => console.error('cash-buyers manual run error', e));
+}));
+
+app.post('/api/cash-buyers/:id/save', asyncHandler(async (req, res) => {
+  const buyer = await dbGet('SELECT * FROM cash_buyers WHERE id = ?', [req.params.id]);
+  if (!buyer) return res.status(404).json({ success: false, error: 'Buyer not found' });
+  await dbRun('UPDATE cash_buyers SET saved = 1 WHERE id = ?', [req.params.id]);
+  // Mirror into the user's Buyers list if not already there.
+  const existing = await dbGet('SELECT id FROM buyers WHERE name = ?', [buyer.name]);
+  if (!existing) {
+    const zips = JSON.parse(buyer.zips ?? '[]');
+    await dbRun(
+      `INSERT INTO buyers (id, name, phone, email, cash_available, deal_types, preferred_areas, avg_deal_size, status, created_at, last_contacted)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, NULL)`,
+      [
+        uuid(), buyer.name, null, null,
+        buyer.total_spend ?? 0, 'Residential', zips.join(', '),
+        buyer.avg_price ?? 0, new Date().toISOString(),
+      ],
+    );
+  }
+  res.json({ success: true });
 }));
 
 if (config.nodeEnv === 'production') {

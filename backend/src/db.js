@@ -245,6 +245,21 @@ export function initDb() {
       points_awarded INTEGER NOT NULL,
       scanned_at TEXT NOT NULL
     )`);
+
+    db.run(`CREATE TABLE IF NOT EXISTS cash_buyers (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL UNIQUE,
+      mailing_address TEXT,
+      buyer_state TEXT,
+      purchase_count INTEGER NOT NULL DEFAULT 0,
+      total_spend INTEGER NOT NULL DEFAULT 0,
+      avg_price INTEGER NOT NULL DEFAULT 0,
+      zips TEXT NOT NULL DEFAULT '[]',
+      last_purchase_date TEXT,
+      saved INTEGER NOT NULL DEFAULT 0,
+      last_seen_at TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    )`);
   });
 }
 
