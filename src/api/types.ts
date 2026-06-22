@@ -276,3 +276,24 @@ export interface DealLinkResult {
   slug: string;
   url: string;
 }
+
+export interface PropertyLead {
+  parcel_id: string;
+  address: string;
+  ward: string | null;
+  owner_name: string | null;
+  owner_address: string | null;
+  assessed_value: number | null;
+  score: number;
+  signals: string; // JSON array string
+  status: 'new' | 'promoted' | 'dismissed';
+  promoted_seller_id: string | null;
+  last_scanned_at: string;
+  created_at: string;
+  signal_details?: Array<{
+    id: string;
+    signal_type: string;
+    signal_value: string | null;
+    points_awarded: number;
+  }>;
+}

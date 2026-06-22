@@ -4,7 +4,7 @@ import type {
   MarketTrend, Neighborhood, GeocodeResult, Health,
   DealInputFields, Deal, ArvEstimate, DealMatches, Insights,
   Activity, OutreachResult, Campaign, CampaignStats, AssistantMessage, AssistantReply,
-  PublicDeal, InquiryBody, DealLinkResult,
+  PublicDeal, InquiryBody, DealLinkResult, PropertyLead,
 } from './types';
 
 const DEFAULT_BASE_URL = (import.meta.env.VITE_API_URL as string | undefined) ?? '';
@@ -126,3 +126,34 @@ export const getPublicDeal = (slug: string) =>
 
 export const submitInquiry = (slug: string, body: InquiryBody) =>
   apiFetch<{ success: boolean }>(`/api/public/deals/${slug}/inquire`, jsonBody(body));
+
+export async function getPropertyLeads(
+  filters: { ward?: string; minScore?: number; status?: string } = {},
+): Promise<PropertyLead[]> {
+  const params = new URLSearchParams();
+  if (filters.ward) params.set('ward', filters.ward);
+  if (filters.minScore !== undefined) params.set('minScore', String(filters.minScore));
+  if (filters.status) params.set('status', filters.status);
+  const qs = params.toString();
+  return apiFetch<PropertyLead[]>(`/api/property-leads${qs ? `?${qs}` : ''}`);
+}
+
+export async function getPropertyLead(parcelId: string): Promise<PropertyLead> {
+  return apiFetch<PropertyLead>(`/api/property-leads/${encodeURIComponent(parcelId)}`);
+}
+
+export async function promotePropertyLead(
+  parcelId: string,
+): Promise<{ success: boolean; sellerId: string }> {
+  return apiFetch(`/api/property-leads/${encodeURIComponent(parcelId)}/promote`, { method: 'POST' });
+}
+
+export async function dismissPropertyLead(
+  parcelId: string,
+): Promise<{ success: boolean }> {
+  return apiFetch(`/api/property-leads/${encodeURIComponent(parcelId)}/dismiss`, { method: 'POST' });
+}
+
+export async function runPropertyIntelScan(): Promise<{ success: boolean; message: string }> {
+  return apiFetch('/api/property-intel/run', { method: 'POST' });
+}
