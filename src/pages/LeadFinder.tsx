@@ -51,6 +51,70 @@ function SignalChips({ signals }: { signals: string[] }) {
   );
 }
 
+const fmtUSD = (n: number) =>
+  n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
+
+// Conservative opening cash offer for a wholesale deal: ~65% of assessed value,
+// rounded to the nearest $1k. This is your negotiation ceiling guide, not a
+// number to put in the first letter.
+function suggestedOffer(assessedValue: number | null): number {
+  if (!assessedValue || assessedValue <= 0) return 0;
+  return Math.round((assessedValue * 0.65) / 1000) * 1000;
+}
+
+function buildLetter(lead: PropertyLead, yourName: string, yourPhone: string): string {
+  const name = lead.owner_name || 'Property Owner';
+  const who = yourName.trim() || '[Your Name]';
+  const phone = yourPhone.trim() || '[Your Phone]';
+  return [
+    `Dear ${name},`,
+    '',
+    `My name is ${who}, and I'm a local real estate investor here in Washington, DC. I'm reaching out because I'd like to buy your property at ${lead.address}.`,
+    '',
+    'I purchase homes directly from owners — as-is, with no repairs, no agent commissions, and no fees. I can pay cash and close on your timeline, whether that is two weeks or two months from now.',
+    '',
+    `If you have ever thought about selling — or are just curious what it's worth — call or text me at ${phone} for a no-obligation cash offer. No pressure, just a quick conversation.`,
+    '',
+    'Sincerely,',
+    who,
+    phone,
+  ].join('\n');
+}
+
+function csvCell(v: string | number | null): string {
+  return `"${String(v ?? '').replace(/"/g, '""')}"`;
+}
+
+function exportMailCampaign(rows: PropertyLead[], yourName: string, yourPhone: string) {
+  const mailable = rows.filter((l) => l.owner_name && l.owner_address);
+  const headers = ['Owner', 'Mailing Address', 'Property Address', 'Ward', 'Score', 'Signals', 'Assessed Value', 'Suggested Max Offer', 'Letter'];
+  const lines = mailable.map((l) => {
+    const signals: string[] = JSON.parse(l.signals ?? '[]');
+    const labels = signals.map((s) => SIGNAL_LABELS[s] ?? s).join('; ');
+    const offer = suggestedOffer(l.assessed_value);
+    return [
+      csvCell(l.owner_name),
+      csvCell(l.owner_address),
+      csvCell(l.address),
+      csvCell(l.ward),
+      csvCell(l.score),
+      csvCell(labels),
+      csvCell(l.assessed_value ? fmtUSD(l.assessed_value) : ''),
+      csvCell(offer ? fmtUSD(offer) : ''),
+      csvCell(buildLetter(l, yourName, yourPhone)),
+    ].join(',');
+  });
+  const csv = [headers.map(csvCell).join(','), ...lines].join('\r\n');
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `dc-mail-campaign-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+  return mailable.length;
+}
+
 export default function LeadFinder() {
   const [ward, setWard] = useState('');
   const [minScore, setMinScore] = useState('');
@@ -58,6 +122,9 @@ export default function LeadFinder() {
   const [scanning, setScanning] = useState(false);
   const [scanMsg, setScanMsg] = useState('');
   const [actionState, setActionState] = useState<Record<string, boolean>>({});
+  const [yourName, setYourName] = useState('');
+  const [yourPhone, setYourPhone] = useState('');
+  const [exportMsg, setExportMsg] = useState('');
 
   const leads = useAsync(
     () => getPropertyLeads({
@@ -104,6 +171,16 @@ export default function LeadFinder() {
     }
   }
 
+  function handleExport() {
+    if (!leads.data || leads.data.length === 0) return;
+    const n = exportMailCampaign(leads.data, yourName, yourPhone);
+    setExportMsg(
+      n === 0
+        ? 'No mailable leads (missing owner/address) in the current view.'
+        : `Exported ${n} ready-to-mail letters. Open the CSV in Excel/Google Sheets, or hand it to a mail house. Each row has the owner, mailing address, your suggested max offer, and a personalized letter.`,
+    );
+  }
+
   return (
     <div style={{ padding: '24px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
@@ -128,6 +205,35 @@ export default function LeadFinder() {
           <div style={{ fontSize: 24, fontWeight: 700 }}>{total}</div>
           <div style={{ fontSize: 12, color: '#6b7280' }}>Total Leads Shown</div>
         </div>
+      </div>
+
+      <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 8, padding: '14px 18px', marginBottom: 20 }}>
+        <div style={{ fontWeight: 700, marginBottom: 4 }}>📬 Direct Mail Campaign</div>
+        <div style={{ fontSize: 13, color: '#374151', marginBottom: 10 }}>
+          Turn the leads below into ready-to-send letters. Every owner has a mailing address — this is your free way to start the conversation. Enter your contact info, then download the CSV (owner, mailing address, suggested max offer, and a personalized letter per lead).
+        </div>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+          <input
+            placeholder="Your name"
+            value={yourName}
+            onChange={(e) => setYourName(e.target.value)}
+            style={{ padding: '6px 10px', borderRadius: 4, border: '1px solid #d1d5db', width: 180 }}
+          />
+          <input
+            placeholder="Your phone (call/text)"
+            value={yourPhone}
+            onChange={(e) => setYourPhone(e.target.value)}
+            style={{ padding: '6px 10px', borderRadius: 4, border: '1px solid #d1d5db', width: 200 }}
+          />
+          <button
+            onClick={handleExport}
+            disabled={!leads.data || leads.data.length === 0}
+            style={{ background: '#16a34a', color: '#fff', border: 'none', borderRadius: 6, padding: '8px 16px', cursor: 'pointer', fontWeight: 600 }}
+          >
+            Export Mail Campaign ({total})
+          </button>
+        </div>
+        {exportMsg && <p style={{ fontSize: 12, color: '#15803d', marginTop: 8, marginBottom: 0 }}>{exportMsg}</p>}
       </div>
 
       <div style={{ display: 'flex', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
@@ -169,6 +275,7 @@ export default function LeadFinder() {
                 <th style={{ padding: '8px 12px' }}>Address</th>
                 <th style={{ padding: '8px 12px' }}>Ward</th>
                 <th style={{ padding: '8px 12px' }}>Score</th>
+                <th style={{ padding: '8px 12px' }}>Est. Offer</th>
                 <th style={{ padding: '8px 12px' }}>Signals</th>
                 <th style={{ padding: '8px 12px' }}>Owner</th>
                 <th style={{ padding: '8px 12px' }}>Status</th>
@@ -184,6 +291,9 @@ export default function LeadFinder() {
                     <td style={{ padding: '8px 12px', fontWeight: 500 }}>{lead.address}</td>
                     <td style={{ padding: '8px 12px', color: '#6b7280' }}>{lead.ward ?? '—'}</td>
                     <td style={{ padding: '8px 12px' }}><ScoreBadge score={lead.score} /></td>
+                    <td style={{ padding: '8px 12px', color: '#15803d', fontWeight: 600 }}>
+                      {suggestedOffer(lead.assessed_value) ? fmtUSD(suggestedOffer(lead.assessed_value)) : '—'}
+                    </td>
                     <td style={{ padding: '8px 12px' }}><SignalChips signals={signals} /></td>
                     <td style={{ padding: '8px 12px', color: '#6b7280' }}>{lead.owner_name ?? '—'}</td>
                     <td style={{ padding: '8px 12px' }}>
