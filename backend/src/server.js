@@ -32,6 +32,7 @@ import {
   assistantSchema,
   inquirySchema,
 } from './schemas.js';
+import { runPropertyIntelScan } from './property-intel.js';
 
 const app = express();
 app.use(cors({ origin: config.corsOrigin }));
@@ -516,6 +517,17 @@ async function runScheduler() {
   const now = new Date();
   const stepsProcessed = await processDueCampaigns(now.toISOString(), send);
   const digestSent = await maybeSendDigest(now.toISOString().slice(0, 10), send, config.notifyEmail || config.emailFrom);
+
+  // Run property intel scan at 8am UTC (3am ET) once per day
+  const hour = now.getUTCHours();
+  if (hour === 8) {
+    const today = now.toISOString().slice(0, 10);
+    const lastScan = await dbGet('SELECT MAX(last_scanned_at) as last FROM property_leads');
+    if (!lastScan?.last || lastScan.last.slice(0, 10) < today) {
+      runPropertyIntelScan().catch((e) => console.error('property intel scheduler error', e));
+    }
+  }
+
   return { stepsProcessed, digestSent };
 }
 
@@ -655,6 +667,61 @@ app.post('/api/public/deals/:slug/inquire', validateBody(inquirySchema), asyncHa
     [uuid(), link.deal_id, 'buyer', null, name, 'inquiry', 'Deal inquiry', 'received', `Inquiry from ${name} (${contact})`, now],
   );
   res.json({ success: true });
+}));
+
+// Property Intel routes
+app.get('/api/property-leads', asyncHandler(async (req, res) => {
+  const { ward, minScore, status } = req.query;
+  let sql = 'SELECT * FROM property_leads WHERE 1=1';
+  const params = [];
+  if (ward) { sql += ' AND ward = ?'; params.push(ward); }
+  if (minScore) { sql += ' AND score >= ?'; params.push(Number(minScore)); }
+  if (status) { sql += ' AND status = ?'; params.push(status); }
+  sql += ' ORDER BY score DESC LIMIT 500';
+  const leads = await dbAll(sql, params);
+  res.json(leads);
+}));
+
+app.get('/api/property-leads/:parcelId', asyncHandler(async (req, res) => {
+  const lead = await dbGet('SELECT * FROM property_leads WHERE parcel_id = ?', [req.params.parcelId]);
+  if (!lead) return res.status(404).json({ success: false, error: 'Lead not found' });
+  const signals = await dbAll('SELECT * FROM lead_signals WHERE parcel_id = ? ORDER BY scanned_at DESC', [req.params.parcelId]);
+  res.json({ ...lead, signal_details: signals });
+}));
+
+app.post('/api/property-leads/:parcelId/promote', asyncHandler(async (req, res) => {
+  const lead = await dbGet('SELECT * FROM property_leads WHERE parcel_id = ?', [req.params.parcelId]);
+  if (!lead) return res.status(404).json({ success: false, error: 'Lead not found' });
+  if (lead.promoted_seller_id) return res.json({ success: true, sellerId: lead.promoted_seller_id });
+  const now = new Date().toISOString();
+  const arv = Math.round((lead.assessed_value ?? 0) * 1.2);
+  const signals = JSON.parse(lead.signals ?? '[]');
+  const sellerId = uuid();
+  await dbRun(
+    `INSERT INTO sellers (id, name, phone, email, property_address, property_city, property_state, motivation, status, created_at, last_contacted)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'new', ?, ?)`,
+    [sellerId, lead.owner_name || 'Unknown Owner', null, null,
+     lead.address, 'Washington', 'DC',
+     `Score: ${lead.score}/100 — Signals: ${signals.join(', ')}. ARV est. $${arv.toLocaleString()}.`,
+     now, null],
+  );
+  await dbRun(
+    "UPDATE property_leads SET promoted_seller_id = ?, status = 'promoted' WHERE parcel_id = ?",
+    [sellerId, req.params.parcelId],
+  );
+  res.json({ success: true, sellerId });
+}));
+
+app.post('/api/property-leads/:parcelId/dismiss', asyncHandler(async (req, res) => {
+  const lead = await dbGet('SELECT * FROM property_leads WHERE parcel_id = ?', [req.params.parcelId]);
+  if (!lead) return res.status(404).json({ success: false, error: 'Lead not found' });
+  await dbRun("UPDATE property_leads SET status = 'dismissed' WHERE parcel_id = ?", [req.params.parcelId]);
+  res.json({ success: true });
+}));
+
+app.post('/api/property-intel/run', asyncHandler(async (req, res) => {
+  res.json({ success: true, message: 'Scan started — results visible in Lead Finder in 2-5 minutes' });
+  runPropertyIntelScan().catch((e) => console.error('property-intel manual run error', e));
 }));
 
 if (config.nodeEnv === 'production') {
