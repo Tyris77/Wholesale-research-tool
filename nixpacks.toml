@@ -1,13 +1,9 @@
-# Single source of truth for the Railway build (railway.json intentionally has
-# no buildCommand so these phases win).
-#   - Node 20: react-router 7 and the Vite/rolldown toolchain require >=20;
-#     Railway's default Node 18 fails the frontend build.
-#   - python3/gcc/gnumake: lets the backend's native sqlite3 module compile.
-[phases.setup]
-nixPkgs = ["nodejs_20", "python3", "gcc", "gnumake"]
-
+# Railway sets NODE_ENV=production (needed for the Express static-serving at
+# runtime), which makes `npm install` skip devDependencies. But tsc and vite —
+# required to build the frontend — live in devDependencies. --include=dev
+# installs them regardless of NODE_ENV, fixing "sh: tsc: not found" (exit 127).
 [phases.install]
-cmds = ["npm install", "cd backend && npm install"]
+cmds = ["npm install --include=dev", "cd backend && npm install"]
 
 [phases.build]
 cmds = ["npm run build"]
