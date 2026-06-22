@@ -126,11 +126,18 @@ async function fetchAllPages(queryUrl, where, outFields) {
   return records;
 }
 
+// We scan the tax-delinquent residential pool (~11k parcels) rather than all
+// ~188k residential parcels. A lead only reaches the warm tier (score ≥ 50)
+// with two stacked signals, and tax delinquency (+40) is the dominant one — so
+// every meaningful lead is in this pool. Pulling 11k instead of 188k keeps the
+// scan fast and well within memory, and avoids the all-or-nothing failure mode
+// of fetching the entire roll. (Non-delinquent vacant+absentee leads are a
+// documented fast-follow.)
 export async function fetchPropertyOwnership() {
   const queryUrl = await discoverItspeQueryUrl();
   const rows = await fetchAllPages(
     queryUrl,
-    "PROPTYPE LIKE 'Residential%'",
+    "PROPTYPE LIKE 'Residential%' AND TOTBALAMT > 0",
     'SSL,PREMISEADD,OWNERNAME,ADDRESS1,CITYSTZIP,ASSESSMENT,TOTBALAMT',
   );
   return rows.map((r) => {
@@ -261,16 +268,23 @@ export async function runPropertyIntelScan() {
   const now = new Date().toISOString();
   const counts = { total: 0, hot: 0, warm: 0, cold: 0, promoted: 0, errors: [] };
 
-  let properties, vacantSet;
+  // The property roll is essential; if it fails, abort. The vacant layer is an
+  // enhancement — if it fails, scan without the vacant signal rather than
+  // losing the whole run.
+  let properties;
   try {
-    [properties, vacantSet] = await Promise.all([
-      fetchPropertyOwnership(),
-      fetchVacantBlighted(),
-    ]);
+    properties = await fetchPropertyOwnership();
   } catch (err) {
-    counts.errors.push(`API fetch failed: ${err.message}`);
-    console.error('property-intel: fetch failed', err);
+    counts.errors.push(`property fetch failed: ${err.message}`);
+    console.error('property-intel: property fetch failed', err);
     return counts;
+  }
+  let vacantSet = new Set();
+  try {
+    vacantSet = await fetchVacantBlighted();
+  } catch (err) {
+    counts.errors.push(`vacant fetch failed (continuing without vacant signal): ${err.message}`);
+    console.error('property-intel: vacant fetch failed, continuing', err);
   }
 
   const unique = deduplicateByParcelId(properties);
@@ -279,7 +293,8 @@ export async function runPropertyIntelScan() {
   // Code-violation data is not yet wired in (no cleanly parcel-joinable DC
   // source); pass an empty set so buildSignals simply never fires that signal.
   const NO_VIOLATIONS = new Set();
-  const hotParcelIds = [];
+  const hotParcelIds = [];   // score >= 75 — shown in the digest
+  const promoteParcelIds = []; // score === 100 — auto-promoted to Sellers
   for (const property of unique.values()) {
     const signals = buildSignals(property, vacantSet, NO_VIOLATIONS);
     const score = scoreProperty(signals);
@@ -287,14 +302,22 @@ export async function runPropertyIntelScan() {
     if (tier === 'cold') { counts.cold++; continue; }
     try {
       await upsertLead(property, signals, score, now);
-      if (tier === 'hot') { counts.hot++; hotParcelIds.push(property.parcelId); }
-      else counts.warm++;
+      if (tier === 'hot') {
+        counts.hot++;
+        hotParcelIds.push(property.parcelId);
+        // Only the very strongest leads (all four signals = 100) are
+        // auto-promoted to Sellers, to keep that list actionable. Every other
+        // warm/hot lead lives in Lead Finder for manual review.
+        if (score === 100) promoteParcelIds.push(property.parcelId);
+      } else {
+        counts.warm++;
+      }
     } catch (err) {
       counts.errors.push(`upsert ${property.parcelId}: ${err.message}`);
     }
   }
 
-  counts.promoted = await promoteHotLeads(hotParcelIds, now);
+  counts.promoted = await promoteHotLeads(promoteParcelIds, now);
 
   if (hotParcelIds.length > 0 && config.notifyEmail) {
     const hotLeads = await dbAll(
