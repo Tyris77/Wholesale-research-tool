@@ -32,7 +32,7 @@ import {
   assistantSchema,
   inquirySchema,
 } from './schemas.js';
-import { runPropertyIntelScan } from './property-intel.js';
+import { runPropertyIntelScan, diagnoseScan } from './property-intel.js';
 
 const app = express();
 app.use(cors({ origin: config.corsOrigin }));
@@ -722,6 +722,11 @@ app.post('/api/property-leads/:parcelId/dismiss', asyncHandler(async (req, res) 
 app.post('/api/property-intel/run', asyncHandler(async (req, res) => {
   res.json({ success: true, message: 'Scan started — results visible in Lead Finder in 2-5 minutes' });
   runPropertyIntelScan().catch((e) => console.error('property-intel manual run error', e));
+}));
+
+app.get('/api/property-intel/diag', asyncHandler(async (req, res) => {
+  const report = await diagnoseScan();
+  res.json(report);
 }));
 
 if (config.nodeEnv === 'production') {

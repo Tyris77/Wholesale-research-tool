@@ -334,3 +334,47 @@ export async function runPropertyIntelScan() {
   console.log(`property-intel scan complete: ${JSON.stringify(counts)}`);
   return counts;
 }
+
+// Synchronous, step-by-step diagnostic so production failures are visible via a
+// single HTTP call instead of only in server logs. Returns where the pipeline
+// breaks (runtime, discovery, ITSPE fetch, vacant fetch, or DB write).
+export async function diagnoseScan() {
+  const report = {
+    nodeVersion: process.version,
+    hasFetch: typeof fetch === 'function',
+    steps: {},
+  };
+  try {
+    const url = await discoverItspeQueryUrl();
+    report.steps.discoverItspe = { ok: true, url };
+    try {
+      const params = new URLSearchParams({
+        where: "PROPTYPE LIKE 'Residential%' AND TOTBALAMT > 0",
+        outFields: 'SSL,TOTBALAMT', returnGeometry: 'false', f: 'json', resultRecordCount: '5',
+      });
+      const data = await fetchWithRetry(`${url}?${params}`);
+      report.steps.itspeFetch = { ok: true, sample: (data.features || []).length, exceededTransferLimit: !!data.exceededTransferLimit };
+    } catch (e) { report.steps.itspeFetch = { ok: false, error: e.message }; }
+  } catch (e) {
+    report.steps.discoverItspe = { ok: false, error: e.message };
+  }
+  try {
+    const params = new URLSearchParams({ where: "STATUS='ACTIVE'", outFields: 'SSL', returnGeometry: 'false', f: 'json', resultRecordCount: '5' });
+    const data = await fetchWithRetry(`${VACANT_BLIGHTED}?${params}`);
+    report.steps.vacantFetch = { ok: true, sample: (data.features || []).length };
+  } catch (e) { report.steps.vacantFetch = { ok: false, error: e.message }; }
+  try {
+    const probe = '__diag_probe__';
+    const ts = new Date().toISOString();
+    await dbRun(
+      `INSERT INTO property_leads (parcel_id, address, score, signals, status, last_scanned_at, created_at)
+       VALUES (?, '1 DIAG ST', 0, '[]', 'new', ?, ?)
+       ON CONFLICT(parcel_id) DO UPDATE SET last_scanned_at = excluded.last_scanned_at`,
+      [probe, ts, ts],
+    );
+    const row = await dbGet('SELECT parcel_id FROM property_leads WHERE parcel_id = ?', [probe]);
+    await dbRun('DELETE FROM property_leads WHERE parcel_id = ?', [probe]);
+    report.steps.dbWrite = { ok: !!row };
+  } catch (e) { report.steps.dbWrite = { ok: false, error: e.message }; }
+  return report;
+}
