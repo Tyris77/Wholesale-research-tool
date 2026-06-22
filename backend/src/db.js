@@ -215,6 +215,30 @@ export function initDb() {
         created_at TEXT NOT NULL
       )
     `);
+
+    db.run(`CREATE TABLE IF NOT EXISTS property_leads (
+      parcel_id TEXT PRIMARY KEY,
+      address TEXT NOT NULL,
+      ward TEXT,
+      owner_name TEXT,
+      owner_address TEXT,
+      assessed_value INTEGER,
+      score INTEGER NOT NULL DEFAULT 0,
+      signals TEXT NOT NULL DEFAULT '[]',
+      status TEXT NOT NULL DEFAULT 'new',
+      promoted_seller_id TEXT,
+      last_scanned_at TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    )`);
+
+    db.run(`CREATE TABLE IF NOT EXISTS lead_signals (
+      id TEXT PRIMARY KEY,
+      parcel_id TEXT NOT NULL,
+      signal_type TEXT NOT NULL,
+      signal_value TEXT,
+      points_awarded INTEGER NOT NULL,
+      scanned_at TEXT NOT NULL
+    )`);
   });
 }
 
