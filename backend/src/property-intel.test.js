@@ -74,3 +74,47 @@ test('isOutOfState: DC owner = false', () => {
 test('isOutOfState: FL owner = true', () => {
   assert.equal(isOutOfState('FL'), true);
 });
+
+import { buildSignals, deduplicateByParcelId } from './property-intel.js';
+
+test('buildSignals: tax delinquent + absentee + out_of_state + vacant + code_violation', () => {
+  const property = {
+    parcelId: 'A1',
+    address: '100 MAIN ST NW',
+    ownerAddress: '999 FLORIDA AVE',
+    ownerState: 'FL',
+    taxDelinquent: true,
+  };
+  const vacantSet = new Set(['A1']);
+  const violationsSet = new Set(['A1']);
+  const signals = buildSignals(property, vacantSet, violationsSet);
+  assert.ok(signals.includes('tax_delinquent'));
+  assert.ok(signals.includes('absentee_owner'));
+  assert.ok(signals.includes('out_of_state'));
+  assert.ok(signals.includes('vacant'));
+  assert.ok(signals.includes('code_violation'));
+  assert.equal(signals.length, 5);
+});
+
+test('buildSignals: same-address owner, in-state, no delinquency', () => {
+  const property = {
+    parcelId: 'B2',
+    address: '200 ELM ST NW',
+    ownerAddress: '200 ELM ST NW',
+    ownerState: 'DC',
+    taxDelinquent: false,
+  };
+  const signals = buildSignals(property, new Set(), new Set());
+  assert.equal(signals.length, 0);
+});
+
+test('deduplicateByParcelId: keeps last occurrence per parcel', () => {
+  const records = [
+    { parcelId: 'X1', address: 'first' },
+    { parcelId: 'X2', address: 'other' },
+    { parcelId: 'X1', address: 'second' },
+  ];
+  const map = deduplicateByParcelId(records);
+  assert.equal(map.size, 2);
+  assert.equal(map.get('X1').address, 'second');
+});
