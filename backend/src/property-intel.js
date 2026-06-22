@@ -24,9 +24,17 @@ export function classifyLead(score) {
   return 'cold';
 }
 
+// Absentee = the property's address does not begin with the owner's mailing
+// street. DC's ITSPE stores the full property address in PREMISEADD
+// ("25 BUCHANAN ST NE WASHINGTON DC 20011") and the owner's mailing street in
+// ADDRESS1 ("25 BUCHANAN ST NE"), so an owner-occupant's property address
+// starts with their mailing street; an absentee owner's does not.
 export function isAbsentee(ownerAddress, propertyAddress) {
   if (!ownerAddress || !propertyAddress) return false;
-  return ownerAddress.trim().toUpperCase() !== propertyAddress.trim().toUpperCase();
+  const owner = ownerAddress.trim().toUpperCase();
+  const property = propertyAddress.trim().toUpperCase();
+  if (!owner || !property) return false;
+  return !property.startsWith(owner);
 }
 
 export function isOutOfState(ownerState) {
@@ -34,18 +42,31 @@ export function isOutOfState(ownerState) {
   return !DC_MD_VA.has(ownerState.trim().toUpperCase());
 }
 
-const BASE = 'https://maps2.dcgis.dc.gov/dcgis/rest/services';
-const OPEN_DATA = 'https://maps2.dcgis.dc.gov/dcgis/rest/services/DCGIS_DATA';
+// Extract the 2-letter state from an ITSPE CITYSTZIP value such as
+// "WASHINGTON DC 20011-6717" or "ALEXANDRIA VA 22310-2633".
+export function parseState(cityStZip) {
+  if (!cityStZip) return '';
+  const m = String(cityStZip).toUpperCase().match(/\b([A-Z]{2})\s+\d{5}/);
+  return m ? m[1] : '';
+}
 
-// ArcGIS layer IDs — verified against DC Open Data portal June 2026
-const LAYERS = {
-  // Real Property Assessment (CAMA residential)
-  realProperty: `${OPEN_DATA}/Property_and_Zoning_WebMercator/MapServer/56/query`,
-  // DCRA Vacant and Blighted Buildings
-  vacantBlighted: `${OPEN_DATA}/Property_and_Zoning_WebMercator/MapServer/54/query`,
-  // DCRA Open Code Violations
-  codeViolations: `${OPEN_DATA}/Inspection_and_Enforcement_WebMercator/MapServer/6/query`,
-};
+// Verified working DC endpoints (checked 2026-06-21).
+//
+// ITSPE (Integrated Tax System Public Extract) is the master tax-roll table:
+// one row per parcel with owner name, mailing address, assessed value, and
+// back-taxes owed. DC rotates the feature-service name with a monthly date
+// suffix (e.g. OCFO_ITSPE_view_05212026), so we discover the current service
+// at runtime via the ArcGIS item search rather than hardcoding the URL.
+const ITSPE_SEARCH = 'https://www.arcgis.com/sharing/rest/search?q=title%3AITSPE&f=json&num=25';
+// DC Office of Buildings "Vacant and Blighted Building Addresses" layer.
+const VACANT_BLIGHTED =
+  'https://maps2.dcgis.dc.gov/dcgis/rest/services/DCGIS_DATA/Property_and_Land_WebMercator/MapServer/82/query';
+
+// SSL (Square-Suffix-Lot) values carry internal padding that differs between
+// sources ("3160    0805"); strip whitespace so the ITSPE↔vacant join is exact.
+function normalizeSsl(ssl) {
+  return String(ssl ?? '').replace(/\s+/g, '').toUpperCase();
+}
 
 export async function fetchWithRetry(url, options = {}, retries = 2) {
   const controller = new AbortController();
@@ -65,62 +86,75 @@ export async function fetchWithRetry(url, options = {}, retries = 2) {
   }
 }
 
-async function fetchAllPages(layerUrl, where, outFields) {
+// Resolve the current ITSPE query endpoint. Returns e.g.
+// ".../OCFO_ITSPE_view_05212026/FeatureServer/53/query". The ITSPE data lives
+// in a *table* (not layer 0), so we look it up by name.
+export async function discoverItspeQueryUrl() {
+  const search = await fetchWithRetry(ITSPE_SEARCH);
+  const svc = (search.results || []).find(
+    (r) => r.type === 'Feature Service' && /OCFO_ITSPE_view/i.test(r.url || ''),
+  );
+  if (!svc) throw new Error('Could not discover current ITSPE feature service');
+  const meta = await fetchWithRetry(`${svc.url}?f=json`);
+  const table = (meta.tables || []).find((t) => t.name === 'ITSPE');
+  if (!table) throw new Error('ITSPE table not found in feature service');
+  return `${svc.url}/${table.id}/query`;
+}
+
+// Page through an ArcGIS query endpoint. Uses the server's own
+// `exceededTransferLimit` flag (rather than a fixed page size) so it works
+// whether the service caps results at 1000, 2000, or anything else.
+async function fetchAllPages(queryUrl, where, outFields) {
   const records = [];
   let offset = 0;
-  const pageSize = 1000;
   while (true) {
     const params = new URLSearchParams({
       where,
       outFields,
+      returnGeometry: 'false',
       f: 'json',
       resultOffset: String(offset),
-      resultRecordCount: String(pageSize),
+      resultRecordCount: '2000',
     });
-    const data = await fetchWithRetry(`${layerUrl}?${params}`);
+    const data = await fetchWithRetry(`${queryUrl}?${params}`);
+    if (data.error) throw new Error(`ArcGIS error: ${JSON.stringify(data.error)}`);
     const features = data.features ?? [];
     records.push(...features.map((f) => f.attributes));
-    if (features.length < pageSize) break;
-    offset += pageSize;
+    if (!data.exceededTransferLimit || features.length === 0) break;
+    offset += features.length;
   }
   return records;
 }
 
 export async function fetchPropertyOwnership() {
+  const queryUrl = await discoverItspeQueryUrl();
   const rows = await fetchAllPages(
-    LAYERS.realProperty,
-    "PROPTYPE='R'",
-    'SSL,PREMISEADD,WARD,OWNERNAME,OWNERADDRESS,OWNERCITY,OWNERSTATE,OWNERZIPCODE,ASSESSED_VAL,TAX_DELINQUENT',
+    queryUrl,
+    "PROPTYPE LIKE 'Residential%'",
+    'SSL,PREMISEADD,OWNERNAME,ADDRESS1,CITYSTZIP,ASSESSMENT,TOTBALAMT',
   );
-  return rows.map((r) => ({
-    parcelId: String(r.SSL ?? '').trim(),
-    address: String(r.PREMISEADD ?? '').trim(),
-    ward: String(r.WARD ?? '').trim(),
-    ownerName: String(r.OWNERNAME ?? '').trim(),
-    ownerAddress: [r.OWNERADDRESS, r.OWNERCITY, r.OWNERSTATE, r.OWNERZIPCODE]
-      .filter(Boolean).join(', ').trim(),
-    ownerState: String(r.OWNERSTATE ?? '').trim(),
-    assessedValue: Number(r.ASSESSED_VAL) || 0,
-    taxDelinquent: Boolean(r.TAX_DELINQUENT),
-  })).filter((r) => r.parcelId && r.address);
+  return rows.map((r) => {
+    const ownerStreet = String(r.ADDRESS1 ?? '').trim();
+    const cityStZip = String(r.CITYSTZIP ?? '').trim();
+    return {
+      parcelId: normalizeSsl(r.SSL),
+      address: String(r.PREMISEADD ?? '').trim(),
+      ward: null, // ITSPE has no ward field; left for a later enrichment pass
+      ownerName: String(r.OWNERNAME ?? '').trim(),
+      // ownerAddress is the mailing STREET, used for the absentee comparison
+      // against the property address. ownerMailing is the full string we store.
+      ownerAddress: ownerStreet,
+      ownerMailing: [ownerStreet, cityStZip].filter(Boolean).join(', '),
+      ownerState: parseState(cityStZip),
+      assessedValue: Number(r.ASSESSMENT) || 0,
+      taxDelinquent: Number(r.TOTBALAMT) > 0,
+    };
+  }).filter((r) => r.parcelId && r.address);
 }
 
 export async function fetchVacantBlighted() {
-  const rows = await fetchAllPages(
-    LAYERS.vacantBlighted,
-    '1=1',
-    'SSL',
-  );
-  return new Set(rows.map((r) => String(r.SSL ?? '').trim()).filter(Boolean));
-}
-
-export async function fetchCodeViolations() {
-  const rows = await fetchAllPages(
-    LAYERS.codeViolations,
-    "STATUS='OPEN'",
-    'SSL',
-  );
-  return new Set(rows.map((r) => String(r.SSL ?? '').trim()).filter(Boolean));
+  const rows = await fetchAllPages(VACANT_BLIGHTED, "STATUS='ACTIVE'", 'SSL');
+  return new Set(rows.map((r) => normalizeSsl(r.SSL)).filter(Boolean));
 }
 
 export function buildSignals(property, vacantSet, violationsSet) {
@@ -181,7 +215,7 @@ async function upsertLead(property, signals, score, now) {
      WHERE status != 'dismissed'`,
     [
       property.parcelId, property.address, property.ward,
-      property.ownerName, property.ownerAddress, property.assessedValue,
+      property.ownerName, property.ownerMailing ?? property.ownerAddress, property.assessedValue,
       score, JSON.stringify(signals), now, now,
     ],
   );
@@ -227,12 +261,11 @@ export async function runPropertyIntelScan() {
   const now = new Date().toISOString();
   const counts = { total: 0, hot: 0, warm: 0, cold: 0, promoted: 0, errors: [] };
 
-  let properties, vacantSet, violationsSet;
+  let properties, vacantSet;
   try {
-    [properties, vacantSet, violationsSet] = await Promise.all([
+    [properties, vacantSet] = await Promise.all([
       fetchPropertyOwnership(),
       fetchVacantBlighted(),
-      fetchCodeViolations(),
     ]);
   } catch (err) {
     counts.errors.push(`API fetch failed: ${err.message}`);
@@ -243,9 +276,12 @@ export async function runPropertyIntelScan() {
   const unique = deduplicateByParcelId(properties);
   counts.total = unique.size;
 
+  // Code-violation data is not yet wired in (no cleanly parcel-joinable DC
+  // source); pass an empty set so buildSignals simply never fires that signal.
+  const NO_VIOLATIONS = new Set();
   const hotParcelIds = [];
   for (const property of unique.values()) {
-    const signals = buildSignals(property, vacantSet, violationsSet);
+    const signals = buildSignals(property, vacantSet, NO_VIOLATIONS);
     const score = scoreProperty(signals);
     const tier = classifyLead(score);
     if (tier === 'cold') { counts.cold++; continue; }

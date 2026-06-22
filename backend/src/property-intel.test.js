@@ -1,7 +1,7 @@
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { db } from './db.js';
-import { scoreProperty, classifyLead, isAbsentee, isOutOfState } from './property-intel.js';
+import { scoreProperty, classifyLead, isAbsentee, isOutOfState, parseState } from './property-intel.js';
 
 after(() => new Promise((resolve) => db.close(() => resolve())));
 
@@ -76,6 +76,29 @@ test('isOutOfState: DC owner = false', () => {
 
 test('isOutOfState: FL owner = true', () => {
   assert.equal(isOutOfState('FL'), true);
+});
+
+// Real ITSPE shape: property address (PREMISEADD) is the full address with
+// city/state/zip; owner mailing street (ADDRESS1) is just the street.
+test('isAbsentee: owner-occupied — full property address starts with owner street', () => {
+  assert.equal(isAbsentee('25 BUCHANAN ST NE', '25 BUCHANAN ST NE WASHINGTON DC 20011'), false);
+});
+
+test('isAbsentee: absentee — owner mails elsewhere', () => {
+  assert.equal(isAbsentee('6039 BURNETT ST', '323 17TH PL NE WASHINGTON DC 20002'), true);
+});
+
+test('parseState: DC mailing', () => {
+  assert.equal(parseState('WASHINGTON DC 20011-6717'), 'DC');
+});
+
+test('parseState: out-of-state VA mailing', () => {
+  assert.equal(parseState('ALEXANDRIA VA 22310-2633'), 'VA');
+});
+
+test('parseState: empty/garbage returns empty string', () => {
+  assert.equal(parseState(''), '');
+  assert.equal(parseState(null), '');
 });
 
 import { buildSignals, deduplicateByParcelId, runPropertyIntelScan, buildDigestEmail } from './property-intel.js';
