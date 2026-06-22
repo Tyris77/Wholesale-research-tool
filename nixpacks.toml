@@ -1,9 +1,10 @@
-# Pin Node 20 — react-router 7 and the Vite/rolldown toolchain require >=20.
-# Railway's default (Node 18) fails the frontend build. NIXPACKS_NODE_VERSION
-# (plus .nvmrc and package.json "engines") selects Node 20 while leaving
-# nixpacks' auto-detected build toolchain (needed to compile sqlite3) intact.
-[variables]
-NIXPACKS_NODE_VERSION = "20"
+# Single source of truth for the Railway build (railway.json intentionally has
+# no buildCommand so these phases win).
+#   - Node 20: react-router 7 and the Vite/rolldown toolchain require >=20;
+#     Railway's default Node 18 fails the frontend build.
+#   - python3/gcc/gnumake: lets the backend's native sqlite3 module compile.
+[phases.setup]
+nixPkgs = ["nodejs_20", "python3", "gcc", "gnumake"]
 
 [phases.install]
 cmds = ["npm install", "cd backend && npm install"]
