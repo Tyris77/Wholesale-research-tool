@@ -1,7 +1,7 @@
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { db } from './db.js';
-import { scoreProperty, classifyLead, isAbsentee, isOutOfState, parseState } from './property-intel.js';
+import { scoreProperty, classifyLead, isAbsentee, isOutOfState, parseState, isLongOwnership } from './property-intel.js';
 
 after(() => new Promise((resolve) => db.close(() => resolve())));
 
@@ -21,12 +21,12 @@ test('scoreProperty: vacant only = 25', () => {
   assert.equal(scoreProperty(['vacant']), 25);
 });
 
-test('scoreProperty: code_violation only = 15', () => {
-  assert.equal(scoreProperty(['code_violation']), 15);
+test('scoreProperty: long_ownership only = 15', () => {
+  assert.equal(scoreProperty(['long_ownership']), 15);
 });
 
 test('scoreProperty: all signals = 100 (capped)', () => {
-  const s = scoreProperty(['tax_delinquent', 'absentee_owner', 'out_of_state', 'vacant', 'code_violation']);
+  const s = scoreProperty(['tax_delinquent', 'absentee_owner', 'out_of_state', 'vacant', 'long_ownership']);
   assert.equal(s, 100);
 });
 
@@ -101,24 +101,41 @@ test('parseState: empty/garbage returns empty string', () => {
   assert.equal(parseState(null), '');
 });
 
+test('isLongOwnership: sale 30 years ago = true', () => {
+  const now = Date.UTC(2026, 0, 1);
+  const thirtyYearsAgo = Date.UTC(1996, 0, 1);
+  assert.equal(isLongOwnership(thirtyYearsAgo, now), true);
+});
+
+test('isLongOwnership: sale 5 years ago = false', () => {
+  const now = Date.UTC(2026, 0, 1);
+  const fiveYearsAgo = Date.UTC(2021, 0, 1);
+  assert.equal(isLongOwnership(fiveYearsAgo, now), false);
+});
+
+test('isLongOwnership: missing/zero sale date = false', () => {
+  assert.equal(isLongOwnership(0), false);
+  assert.equal(isLongOwnership(null), false);
+});
+
 import { buildSignals, deduplicateByParcelId, runPropertyIntelScan, buildDigestEmail } from './property-intel.js';
 
-test('buildSignals: tax delinquent + absentee + out_of_state + vacant + code_violation', () => {
+test('buildSignals: tax delinquent + absentee + out_of_state + vacant + long_ownership', () => {
   const property = {
     parcelId: 'A1',
     address: '100 MAIN ST NW',
     ownerAddress: '999 FLORIDA AVE',
     ownerState: 'FL',
     taxDelinquent: true,
+    longOwnership: true,
   };
   const vacantSet = new Set(['A1']);
-  const violationsSet = new Set(['A1']);
-  const signals = buildSignals(property, vacantSet, violationsSet);
+  const signals = buildSignals(property, vacantSet);
   assert.ok(signals.includes('tax_delinquent'));
   assert.ok(signals.includes('absentee_owner'));
   assert.ok(signals.includes('out_of_state'));
   assert.ok(signals.includes('vacant'));
-  assert.ok(signals.includes('code_violation'));
+  assert.ok(signals.includes('long_ownership'));
   assert.equal(signals.length, 5);
 });
 
@@ -129,8 +146,9 @@ test('buildSignals: same-address owner, in-state, no delinquency', () => {
     ownerAddress: '200 ELM ST NW',
     ownerState: 'DC',
     taxDelinquent: false,
+    longOwnership: false,
   };
-  const signals = buildSignals(property, new Set(), new Set());
+  const signals = buildSignals(property, new Set());
   assert.equal(signals.length, 0);
 });
 

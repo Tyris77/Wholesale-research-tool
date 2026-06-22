@@ -13,7 +13,7 @@ const SIGNAL_LABELS: Record<string, string> = {
   absentee_owner: 'Absentee',
   out_of_state: 'Out-of-State',
   vacant: 'Vacant',
-  code_violation: 'Code Violations',
+  long_ownership: 'Long-Term Owner',
 };
 
 const SIGNAL_COLORS: Record<string, string> = {
@@ -21,7 +21,7 @@ const SIGNAL_COLORS: Record<string, string> = {
   absentee_owner: '#d97706',
   out_of_state: '#b45309',
   vacant: '#7c3aed',
-  code_violation: '#0369a1',
+  long_ownership: '#0369a1',
 };
 
 function ScoreBadge({ score }: { score: number }) {

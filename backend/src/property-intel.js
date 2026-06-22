@@ -8,10 +8,18 @@ const SIGNAL_POINTS = {
   absentee_owner: 20,
   out_of_state: 15,
   vacant: 25,
-  code_violation: 15,
+  long_ownership: 15,
 };
 
 const DC_MD_VA = new Set(['DC', 'MD', 'VA']);
+
+// "Long ownership" = held 25+ years. DC does not publish code violations as a
+// parcel-joinable dataset, so this fills that signal slot with an equally
+// strong, available motivation indicator (high equity, aging/tired owner,
+// likely inherited) computed from ITSPE's last-sale date.
+const LONG_OWNERSHIP_MS = 25 * 365.25 * 24 * 60 * 60 * 1000;
+
+let scanRunning = false;
 
 export function scoreProperty(signals) {
   const total = signals.reduce((sum, s) => sum + (SIGNAL_POINTS[s] ?? 0), 0);
@@ -50,6 +58,14 @@ export function parseState(cityStZip) {
   return m ? m[1] : '';
 }
 
+// True when the last recorded sale (epoch ms) is 25+ years before `now`.
+// A missing/zero sale date does NOT fire — it usually means missing data, and
+// a false motivation signal is worse than a missed one.
+export function isLongOwnership(saleDateMs, now = Date.now()) {
+  if (!saleDateMs || saleDateMs <= 0) return false;
+  return now - saleDateMs >= LONG_OWNERSHIP_MS;
+}
+
 // Verified working DC endpoints (checked 2026-06-21).
 //
 // ITSPE (Integrated Tax System Public Extract) is the master tax-roll table:
@@ -61,6 +77,10 @@ const ITSPE_SEARCH = 'https://www.arcgis.com/sharing/rest/search?q=title%3AITSPE
 // DC Office of Buildings "Vacant and Blighted Building Addresses" layer.
 const VACANT_BLIGHTED =
   'https://maps2.dcgis.dc.gov/dcgis/rest/services/DCGIS_DATA/Property_and_Land_WebMercator/MapServer/82/query';
+// DC Master Address Repository "Address Points" — the SSL→Ward source (ITSPE
+// itself has no ward field).
+const ADDRESS_POINTS =
+  'https://maps2.dcgis.dc.gov/dcgis/rest/services/DCGIS_DATA/Location_WebMercator/MapServer/0/query';
 
 // SSL (Square-Suffix-Lot) values carry internal padding that differs between
 // sources ("3160    0805"); strip whitespace so the ITSPE↔vacant join is exact.
@@ -138,7 +158,7 @@ export async function fetchPropertyOwnership() {
   const rows = await fetchAllPages(
     queryUrl,
     "PROPTYPE LIKE 'Residential%' AND TOTBALAMT > 0",
-    'SSL,PREMISEADD,OWNERNAME,ADDRESS1,CITYSTZIP,ASSESSMENT,TOTBALAMT',
+    'SSL,PREMISEADD,OWNERNAME,ADDRESS1,CITYSTZIP,ASSESSMENT,TOTBALAMT,SALEDATE',
   );
   return rows.map((r) => {
     const ownerStreet = String(r.ADDRESS1 ?? '').trim();
@@ -146,7 +166,7 @@ export async function fetchPropertyOwnership() {
     return {
       parcelId: normalizeSsl(r.SSL),
       address: String(r.PREMISEADD ?? '').trim(),
-      ward: null, // ITSPE has no ward field; left for a later enrichment pass
+      ward: null, // enriched from the Address Points ward map during the scan
       ownerName: String(r.OWNERNAME ?? '').trim(),
       // ownerAddress is the mailing STREET, used for the absentee comparison
       // against the property address. ownerMailing is the full string we store.
@@ -155,6 +175,7 @@ export async function fetchPropertyOwnership() {
       ownerState: parseState(cityStZip),
       assessedValue: Number(r.ASSESSMENT) || 0,
       taxDelinquent: Number(r.TOTBALAMT) > 0,
+      longOwnership: isLongOwnership(Number(r.SALEDATE) || 0),
     };
   }).filter((r) => r.parcelId && r.address);
 }
@@ -164,7 +185,18 @@ export async function fetchVacantBlighted() {
   return new Set(rows.map((r) => normalizeSsl(r.SSL)).filter(Boolean));
 }
 
-export function buildSignals(property, vacantSet, violationsSet) {
+// Build an SSL→Ward lookup from the Master Address Repository (~144k rows).
+export async function fetchWardMap() {
+  const rows = await fetchAllPages(ADDRESS_POINTS, 'SSL IS NOT NULL', 'SSL,WARD');
+  const map = new Map();
+  for (const r of rows) {
+    const ssl = normalizeSsl(r.SSL);
+    if (ssl && r.WARD) map.set(ssl, String(r.WARD).trim());
+  }
+  return map;
+}
+
+export function buildSignals(property, vacantSet) {
   const signals = [];
   if (property.taxDelinquent) signals.push('tax_delinquent');
   if (isAbsentee(property.ownerAddress, property.address)) {
@@ -172,7 +204,7 @@ export function buildSignals(property, vacantSet, violationsSet) {
     if (isOutOfState(property.ownerState)) signals.push('out_of_state');
   }
   if (vacantSet.has(property.parcelId)) signals.push('vacant');
-  if (violationsSet.has(property.parcelId)) signals.push('code_violation');
+  if (property.longOwnership) signals.push('long_ownership');
   return signals;
 }
 
@@ -265,74 +297,86 @@ async function promoteHotLeads(hotParcelIds, now) {
 }
 
 export async function runPropertyIntelScan() {
+  if (scanRunning) return { total: 0, hot: 0, warm: 0, cold: 0, promoted: 0, errors: ['scan already in progress'] };
+  scanRunning = true;
   const now = new Date().toISOString();
   const counts = { total: 0, hot: 0, warm: 0, cold: 0, promoted: 0, errors: [] };
 
-  // The property roll is essential; if it fails, abort. The vacant layer is an
-  // enhancement — if it fails, scan without the vacant signal rather than
-  // losing the whole run.
-  let properties;
   try {
-    properties = await fetchPropertyOwnership();
-  } catch (err) {
-    counts.errors.push(`property fetch failed: ${err.message}`);
-    console.error('property-intel: property fetch failed', err);
-    return counts;
-  }
-  let vacantSet = new Set();
-  try {
-    vacantSet = await fetchVacantBlighted();
-  } catch (err) {
-    counts.errors.push(`vacant fetch failed (continuing without vacant signal): ${err.message}`);
-    console.error('property-intel: vacant fetch failed, continuing', err);
-  }
-
-  const unique = deduplicateByParcelId(properties);
-  counts.total = unique.size;
-
-  // Code-violation data is not yet wired in (no cleanly parcel-joinable DC
-  // source); pass an empty set so buildSignals simply never fires that signal.
-  const NO_VIOLATIONS = new Set();
-  const hotParcelIds = [];   // score >= 75 — shown in the digest
-  const promoteParcelIds = []; // score === 100 — auto-promoted to Sellers
-  for (const property of unique.values()) {
-    const signals = buildSignals(property, vacantSet, NO_VIOLATIONS);
-    const score = scoreProperty(signals);
-    const tier = classifyLead(score);
-    if (tier === 'cold') { counts.cold++; continue; }
+    // The property roll is essential; if it fails, abort. The vacant layer is an
+    // enhancement — if it fails, scan without the vacant signal rather than
+    // losing the whole run.
+    let properties;
     try {
-      await upsertLead(property, signals, score, now);
-      if (tier === 'hot') {
-        counts.hot++;
-        hotParcelIds.push(property.parcelId);
-        // Only the very strongest leads (all four signals = 100) are
-        // auto-promoted to Sellers, to keep that list actionable. Every other
-        // warm/hot lead lives in Lead Finder for manual review.
-        if (score === 100) promoteParcelIds.push(property.parcelId);
-      } else {
-        counts.warm++;
-      }
+      properties = await fetchPropertyOwnership();
     } catch (err) {
-      counts.errors.push(`upsert ${property.parcelId}: ${err.message}`);
+      counts.errors.push(`property fetch failed: ${err.message}`);
+      console.error('property-intel: property fetch failed', err);
+      return counts;
     }
-  }
-
-  counts.promoted = await promoteHotLeads(promoteParcelIds, now);
-
-  if (hotParcelIds.length > 0 && config.notifyEmail) {
-    const hotLeads = await dbAll(
-      `SELECT * FROM property_leads WHERE parcel_id IN (${hotParcelIds.slice(0, 5).map(() => '?').join(',')}) ORDER BY score DESC`,
-      hotParcelIds.slice(0, 5),
-    );
-    const email = buildDigestEmail(hotLeads);
-    if (email) {
-      await sendEmail({ to: config.notifyEmail, subject: email.subject, html: email.html })
-        .catch((e) => console.error('digest email failed', e));
+    let vacantSet = new Set();
+    try {
+      vacantSet = await fetchVacantBlighted();
+    } catch (err) {
+      counts.errors.push(`vacant fetch failed (continuing without vacant signal): ${err.message}`);
+      console.error('property-intel: vacant fetch failed, continuing', err);
     }
-  }
+    // Ward enrichment is non-fatal — on failure leads simply have ward = null.
+    let wardMap = new Map();
+    try {
+      wardMap = await fetchWardMap();
+    } catch (err) {
+      counts.errors.push(`ward fetch failed (continuing without ward): ${err.message}`);
+      console.error('property-intel: ward fetch failed, continuing', err);
+    }
 
-  console.log(`property-intel scan complete: ${JSON.stringify(counts)}`);
-  return counts;
+    const unique = deduplicateByParcelId(properties);
+    counts.total = unique.size;
+
+    const hotParcelIds = [];   // score >= 75 — shown in the digest
+    const promoteParcelIds = []; // score === 100 — auto-promoted to Sellers
+    for (const property of unique.values()) {
+      property.ward = wardMap.get(property.parcelId) ?? null;
+      const signals = buildSignals(property, vacantSet);
+      const score = scoreProperty(signals);
+      const tier = classifyLead(score);
+      if (tier === 'cold') { counts.cold++; continue; }
+      try {
+        await upsertLead(property, signals, score, now);
+        if (tier === 'hot') {
+          counts.hot++;
+          hotParcelIds.push(property.parcelId);
+          // Only the very strongest leads (all four signals = 100) are
+          // auto-promoted to Sellers, to keep that list actionable. Every other
+          // warm/hot lead lives in Lead Finder for manual review.
+          if (score === 100) promoteParcelIds.push(property.parcelId);
+        } else {
+          counts.warm++;
+        }
+      } catch (err) {
+        counts.errors.push(`upsert ${property.parcelId}: ${err.message}`);
+      }
+    }
+
+    counts.promoted = await promoteHotLeads(promoteParcelIds, now);
+
+    if (hotParcelIds.length > 0 && config.notifyEmail) {
+      const hotLeads = await dbAll(
+        `SELECT * FROM property_leads WHERE parcel_id IN (${hotParcelIds.slice(0, 5).map(() => '?').join(',')}) ORDER BY score DESC`,
+        hotParcelIds.slice(0, 5),
+      );
+      const email = buildDigestEmail(hotLeads);
+      if (email) {
+        await sendEmail({ to: config.notifyEmail, subject: email.subject, html: email.html })
+          .catch((e) => console.error('digest email failed', e));
+      }
+    }
+
+    console.log(`property-intel scan complete: ${JSON.stringify(counts)}`);
+    return counts;
+  } finally {
+    scanRunning = false;
+  }
 }
 
 // Synchronous, step-by-step diagnostic so production failures are visible via a
