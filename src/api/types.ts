@@ -288,6 +288,9 @@ export interface PropertyLead {
   signals: string; // JSON array string
   status: 'new' | 'promoted' | 'dismissed';
   promoted_seller_id: string | null;
+  phone: string | null;
+  email: string | null;
+  skip_traced_at: string | null;
   last_scanned_at: string;
   created_at: string;
   signal_details?: Array<{

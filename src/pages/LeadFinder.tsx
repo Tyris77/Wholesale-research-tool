@@ -5,6 +5,7 @@ import {
   promotePropertyLead,
   dismissPropertyLead,
   runPropertyIntelScan,
+  skipTraceLead,
 } from '../api/client';
 import type { PropertyLead } from '../api/types';
 
@@ -54,6 +55,12 @@ function SignalChips({ signals }: { signals: string[] }) {
 const fmtUSD = (n: number) =>
   n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
 
+function fmtPhone(p: string | null): string {
+  if (!p) return '';
+  const d = p.replace(/\D/g, '').slice(-10);
+  return d.length === 10 ? `(${d.slice(0, 3)}) ${d.slice(3, 6)}-${d.slice(6)}` : p;
+}
+
 // Conservative opening cash offer for a wholesale deal: ~65% of assessed value,
 // rounded to the nearest $1k. This is your negotiation ceiling guide, not a
 // number to put in the first letter.
@@ -87,13 +94,15 @@ function csvCell(v: string | number | null): string {
 
 function exportMailCampaign(rows: PropertyLead[], yourName: string, yourPhone: string) {
   const mailable = rows.filter((l) => l.owner_name && l.owner_address);
-  const headers = ['Owner', 'Mailing Address', 'Property Address', 'Ward', 'Score', 'Signals', 'Assessed Value', 'Suggested Max Offer', 'Letter'];
+  const headers = ['Owner', 'Owner Phone', 'Owner Email', 'Mailing Address', 'Property Address', 'Ward', 'Score', 'Signals', 'Assessed Value', 'Suggested Max Offer', 'Letter'];
   const lines = mailable.map((l) => {
     const signals: string[] = JSON.parse(l.signals ?? '[]');
     const labels = signals.map((s) => SIGNAL_LABELS[s] ?? s).join('; ');
     const offer = suggestedOffer(l.assessed_value);
     return [
       csvCell(l.owner_name),
+      csvCell(fmtPhone(l.phone)),
+      csvCell(l.email),
       csvCell(l.owner_address),
       csvCell(l.address),
       csvCell(l.ward),
@@ -125,6 +134,8 @@ export default function LeadFinder() {
   const [yourName, setYourName] = useState('');
   const [yourPhone, setYourPhone] = useState('');
   const [exportMsg, setExportMsg] = useState('');
+  const [tracing, setTracing] = useState<Record<string, boolean>>({});
+  const [traceMsg, setTraceMsg] = useState('');
 
   const leads = useAsync(
     () => getPropertyLeads({
@@ -168,6 +179,20 @@ export default function LeadFinder() {
       leads.run();
     } finally {
       setActionState((p) => ({ ...p, [lead.parcel_id]: false }));
+    }
+  }
+
+  async function handleSkipTrace(lead: PropertyLead) {
+    setTracing((p) => ({ ...p, [lead.parcel_id]: true }));
+    setTraceMsg('');
+    try {
+      const r = await skipTraceLead(lead.parcel_id);
+      if (!r.phone && !r.email) setTraceMsg(`No contact found for ${lead.address}.`);
+      leads.run();
+    } catch (e) {
+      setTraceMsg(e instanceof Error ? e.message : 'Skip trace failed.');
+    } finally {
+      setTracing((p) => ({ ...p, [lead.parcel_id]: false }));
     }
   }
 
@@ -261,6 +286,8 @@ export default function LeadFinder() {
         </button>
       </div>
 
+      {traceMsg && <p style={{ fontSize: 13, color: '#b45309', marginBottom: 8 }}>{traceMsg}</p>}
+
       {leads.loading && <p>Loading leads...</p>}
       {leads.error && <p style={{ color: '#dc2626' }}>Error: {leads.error}</p>}
       {leads.data && leads.data.length === 0 && (
@@ -278,6 +305,7 @@ export default function LeadFinder() {
                 <th style={{ padding: '8px 12px' }}>Est. Offer</th>
                 <th style={{ padding: '8px 12px' }}>Signals</th>
                 <th style={{ padding: '8px 12px' }}>Owner</th>
+                <th style={{ padding: '8px 12px' }}>Contact</th>
                 <th style={{ padding: '8px 12px' }}>Status</th>
                 <th style={{ padding: '8px 12px' }}>Actions</th>
               </tr>
@@ -296,6 +324,22 @@ export default function LeadFinder() {
                     </td>
                     <td style={{ padding: '8px 12px' }}><SignalChips signals={signals} /></td>
                     <td style={{ padding: '8px 12px', color: '#6b7280' }}>{lead.owner_name ?? '—'}</td>
+                    <td style={{ padding: '8px 12px', fontSize: 12 }}>
+                      {lead.phone || lead.email ? (
+                        <div>
+                          {lead.phone && <div style={{ fontWeight: 600, color: '#111827' }}>{fmtPhone(lead.phone)}</div>}
+                          {lead.email && <div style={{ color: '#6b7280' }}>{lead.email}</div>}
+                        </div>
+                      ) : (
+                        <button
+                          disabled={tracing[lead.parcel_id]}
+                          onClick={() => handleSkipTrace(lead)}
+                          style={{ background: '#0369a1', color: '#fff', border: 'none', borderRadius: 4, padding: '3px 10px', cursor: 'pointer', fontSize: 12 }}
+                        >
+                          {tracing[lead.parcel_id] ? 'Tracing…' : 'Skip Trace'}
+                        </button>
+                      )}
+                    </td>
                     <td style={{ padding: '8px 12px' }}>
                       <span style={{ fontSize: 11, textTransform: 'capitalize' }}>{lead.status}</span>
                     </td>

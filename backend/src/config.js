@@ -18,6 +18,7 @@ export const config = {
     census: process.env.CENSUS_API_KEY || '',
     rentcast: process.env.RENTCAST_API_KEY || '',
     resend: process.env.RESEND_API_KEY || '',
+    batchdata: process.env.BATCHDATA_API_KEY || '',
   },
 };
 
@@ -28,5 +29,6 @@ export function integrationStatus(keys = config.keys) {
     census: isConfigured(keys.census),
     rentcast: isConfigured(keys.rentcast),
     resend: isConfigured(keys.resend),
+    batchdata: isConfigured(keys.batchdata),
   };
 }

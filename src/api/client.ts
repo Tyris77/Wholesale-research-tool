@@ -175,3 +175,9 @@ export async function findCashBuyers(): Promise<{ success: boolean; message: str
 export async function saveCashBuyer(id: string): Promise<{ success: boolean }> {
   return apiFetch(`/api/cash-buyers/${encodeURIComponent(id)}/save`, { method: 'POST' });
 }
+
+export async function skipTraceLead(
+  parcelId: string,
+): Promise<{ success: boolean; phone: string | null; email: string | null }> {
+  return apiFetch(`/api/property-leads/${encodeURIComponent(parcelId)}/skip-trace`, { method: 'POST' });
+}

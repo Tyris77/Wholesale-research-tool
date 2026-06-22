@@ -5,3 +5,4 @@
 process.env.RESEND_API_KEY = '';
 process.env.EMAIL_FROM = '';
 process.env.GROQ_API_KEY = '';
+process.env.BATCHDATA_API_KEY = '';

@@ -34,6 +34,7 @@ import {
 } from './schemas.js';
 import { runPropertyIntelScan, diagnoseScan } from './property-intel.js';
 import { findCashBuyers } from './cash-buyers.js';
+import { parseDcAddress, skipTraceAddress, bestPhone } from './skip-trace.js';
 
 const app = express();
 app.use(cors({ origin: config.corsOrigin }));
@@ -737,6 +738,30 @@ app.post('/api/property-intel/run', asyncHandler(async (req, res) => {
 app.get('/api/property-intel/diag', asyncHandler(async (req, res) => {
   const report = await diagnoseScan();
   res.json(report);
+}));
+
+// Skip trace a lead's owner: look up phone/email via BatchData, store on the
+// lead (and its promoted seller, if any). Costs ~$0.10-0.18 per call.
+app.post('/api/property-leads/:parcelId/skip-trace', asyncHandler(async (req, res) => {
+  const lead = await dbGet('SELECT * FROM property_leads WHERE parcel_id = ?', [req.params.parcelId]);
+  if (!lead) return res.status(404).json({ success: false, error: 'Lead not found' });
+  let contacts;
+  try {
+    contacts = await skipTraceAddress(parseDcAddress(lead.address));
+  } catch (e) {
+    return res.status(502).json({ success: false, error: e.message });
+  }
+  const phone = bestPhone(contacts.phones);
+  const email = contacts.emails[0] ?? null;
+  const now = new Date().toISOString();
+  await dbRun(
+    'UPDATE property_leads SET phone = ?, email = ?, skip_traced_at = ? WHERE parcel_id = ?',
+    [phone, email, now, req.params.parcelId],
+  );
+  if (lead.promoted_seller_id) {
+    await dbRun('UPDATE sellers SET phone = ?, email = ? WHERE id = ?', [phone, email, lead.promoted_seller_id]);
+  }
+  res.json({ success: true, phone, email, phones: contacts.phones, emails: contacts.emails });
 }));
 
 // Cash Buyer routes

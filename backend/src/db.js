@@ -233,9 +233,17 @@ export function initDb() {
       signals TEXT NOT NULL DEFAULT '[]',
       status TEXT NOT NULL DEFAULT 'new',
       promoted_seller_id TEXT,
+      phone TEXT,
+      email TEXT,
+      skip_traced_at TEXT,
       last_scanned_at TEXT NOT NULL,
       created_at TEXT NOT NULL
     )`);
+    // Backfill skip-trace columns for databases created before this feature
+    // (the empty callbacks swallow the harmless "duplicate column" error).
+    db.run('ALTER TABLE property_leads ADD COLUMN phone TEXT', () => {});
+    db.run('ALTER TABLE property_leads ADD COLUMN email TEXT', () => {});
+    db.run('ALTER TABLE property_leads ADD COLUMN skip_traced_at TEXT', () => {});
 
     db.run(`CREATE TABLE IF NOT EXISTS lead_signals (
       id TEXT PRIMARY KEY,

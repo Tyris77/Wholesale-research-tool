@@ -83,3 +83,17 @@ test('POST /api/property-intel/run returns success immediately', async () => {
   assert.equal(res.body.success, true);
   assert.ok(res.body.message);
 });
+
+test('POST /api/property-leads/:parcelId/skip-trace 404 for unknown lead', async () => {
+  const res = await request(app).post('/api/property-leads/NOPE/skip-trace');
+  assert.equal(res.status, 404);
+});
+
+test('POST /api/property-leads/:parcelId/skip-trace 502 with clear message when no API key', async () => {
+  // BATCHDATA_API_KEY is blanked in tests, so this exercises the not-configured
+  // path without ever calling BatchData.
+  const res = await request(app).post('/api/property-leads/TEST001/skip-trace');
+  assert.equal(res.status, 502);
+  assert.equal(res.body.success, false);
+  assert.match(res.body.error, /not set up|BATCHDATA_API_KEY/);
+});
