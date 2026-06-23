@@ -34,7 +34,7 @@ import {
 } from './schemas.js';
 import { runPropertyIntelScan, diagnoseScan } from './property-intel.js';
 import { findCashBuyers } from './cash-buyers.js';
-import { parseDcAddress, skipTraceAddress, bestPhone } from './skip-trace.js';
+import { parseDcAddress, parseMailingAddress, skipTraceAddress, bestPhone } from './skip-trace.js';
 
 const app = express();
 app.use(cors({ origin: config.corsOrigin }));
@@ -745,9 +745,14 @@ app.get('/api/property-intel/diag', asyncHandler(async (req, res) => {
 app.post('/api/property-leads/:parcelId/skip-trace', asyncHandler(async (req, res) => {
   const lead = await dbGet('SELECT * FROM property_leads WHERE parcel_id = ?', [req.params.parcelId]);
   if (!lead) return res.status(404).json({ success: false, error: 'Lead not found' });
+  // Trace the OWNER at their mailing address; for absentee/out-of-state leads
+  // that reaches the seller, not the tenant living at the property. Fall back to
+  // the property address only when we have no usable mailing address.
+  const mailing = lead.owner_address ? parseMailingAddress(lead.owner_address) : null;
+  const target = mailing && mailing.street && mailing.state ? mailing : parseDcAddress(lead.address);
   let contacts;
   try {
-    contacts = await skipTraceAddress(parseDcAddress(lead.address));
+    contacts = await skipTraceAddress(target);
   } catch (e) {
     return res.status(502).json({ success: false, error: e.message });
   }

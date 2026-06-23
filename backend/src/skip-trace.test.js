@@ -1,7 +1,7 @@
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { db } from './db.js';
-import { parseDcAddress, extractContacts, bestPhone, skipTraceAddress } from './skip-trace.js';
+import { parseDcAddress, parseMailingAddress, extractContacts, bestPhone, skipTraceAddress } from './skip-trace.js';
 
 after(() => new Promise((resolve) => db.close(() => resolve())));
 
@@ -16,6 +16,20 @@ test('parseDcAddress: handles zip+4 and unit', () => {
   assert.deepEqual(
     parseDcAddress('2500 Q ST NW # 228 WASHINGTON DC 20007-3025'),
     { street: '2500 Q ST NW # 228', city: 'Washington', state: 'DC', zip: '20007' },
+  );
+});
+
+test('parseMailingAddress: splits an out-of-state owner mailing address', () => {
+  assert.deepEqual(
+    parseMailingAddress('999 FLORIDA AVE, MIAMI FL 33101'),
+    { street: '999 FLORIDA AVE', city: 'MIAMI', state: 'FL', zip: '33101' },
+  );
+});
+
+test('parseMailingAddress: handles a DC owner-occupant and zip+4', () => {
+  assert.deepEqual(
+    parseMailingAddress('25 BUCHANAN ST NE, WASHINGTON DC 20011-1234'),
+    { street: '25 BUCHANAN ST NE', city: 'WASHINGTON', state: 'DC', zip: '20011' },
   );
 });
 

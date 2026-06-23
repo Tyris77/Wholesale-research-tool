@@ -16,6 +16,25 @@ export function parseDcAddress(premiseAddr) {
   return { street, city: 'Washington', state: 'DC', zip };
 }
 
+// Split an owner's full mailing address ("999 FLORIDA AVE, MIAMI FL 33101")
+// into trace parts. Unlike parseDcAddress this is state-agnostic, because an
+// absentee owner's mail can land anywhere. We trace the OWNER at their mailing
+// address (not the property), so absentee leads reach the seller, not a tenant.
+export function parseMailingAddress(fullMailing) {
+  const s = String(fullMailing ?? '').trim();
+  const comma = s.indexOf(',');
+  const street = (comma >= 0 ? s.slice(0, comma) : s).trim();
+  const rest = (comma >= 0 ? s.slice(comma + 1) : '').trim();
+  // Preferred shape after the comma: "CITY ST ZIP".
+  const m = rest.match(/^(.*?)\s+([A-Za-z]{2})\s+(\d{5})(?:-\d{4})?\s*$/);
+  if (m) return { street, city: m[1].trim(), state: m[2].toUpperCase(), zip: m[3] };
+  // Loose fallback: pull a trailing zip and a 2-letter state token if present.
+  const zip = (rest.match(/(\d{5})(?:-\d{4})?\s*$/) || [, ''])[1];
+  const state = (rest.match(/\b([A-Za-z]{2})\b(?!.*\b[A-Za-z]{2}\b)/) || [, ''])[1].toUpperCase();
+  const city = rest.replace(/\b[A-Za-z]{2}\b\s*\d{5}.*$/, '').replace(/[, ]+$/, '').trim();
+  return { street, city, state, zip };
+}
+
 const digitsOf = (s) => String(s).replace(/\D/g, '');
 
 // Defensively pull phones and emails out of a skip-trace response regardless of
