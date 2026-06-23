@@ -90,10 +90,10 @@ test('POST /api/property-leads/:parcelId/skip-trace 404 for unknown lead', async
 });
 
 test('POST /api/property-leads/:parcelId/skip-trace 502 with clear message when no API key', async () => {
-  // ROCKETSKIP_API_KEY is blanked in tests, so this exercises the not-configured
-  // path without ever calling RocketSkip.
+  // TRACERFY_API_KEY is blanked in tests, so this exercises the not-configured
+  // path without ever calling Tracerfy.
   const res = await request(app).post('/api/property-leads/TEST001/skip-trace');
   assert.equal(res.status, 502);
   assert.equal(res.body.success, false);
-  assert.match(res.body.error, /not set up|ROCKETSKIP_API_KEY/);
+  assert.match(res.body.error, /not set up|TRACERFY_API_KEY/);
 });

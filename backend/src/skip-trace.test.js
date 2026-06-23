@@ -19,23 +19,23 @@ test('parseDcAddress: handles zip+4 and unit', () => {
   );
 });
 
-test('extractContacts: pulls phones (deduped, last-10) and emails from nested response', () => {
+test('extractContacts: pulls phones (deduped, last-10, with dnc flag) and emails from a Tracerfy response', () => {
   const resp = {
-    results: {
-      persons: [{
-        name: { full: 'JANE DOE' },
-        phoneNumbers: [
-          { number: '+1 (202) 555-0100', type: 'Mobile' },
-          { number: '202-555-0100', type: 'Mobile' }, // duplicate
-          { number: '2025550101', type: 'Landline' },
-        ],
-        emails: [{ email: 'JANE@EXAMPLE.COM' }],
-      }],
-    },
+    hit: true,
+    persons: [{
+      full_name: 'JANE DOE',
+      phones: [
+        { number: '+1 (202) 555-0100', type: 'Mobile', dnc: false, rank: 1 },
+        { number: '202-555-0100', type: 'Mobile', dnc: false, rank: 2 }, // duplicate
+        { number: '2025550101', type: 'Landline', dnc: true, rank: 3 },
+      ],
+      emails: [{ email: 'JANE@EXAMPLE.COM', rank: 1 }],
+    }],
   };
   const { phones, emails } = extractContacts(resp);
   assert.equal(phones.length, 2);
   assert.deepEqual(phones.map((p) => p.number), ['2025550100', '2025550101']);
+  assert.deepEqual(phones.map((p) => p.dnc), [false, true]);
   assert.deepEqual(emails, ['jane@example.com']);
 });
 
@@ -50,10 +50,29 @@ test('bestPhone: prefers mobile over landline', () => {
   assert.equal(bestPhone([]), null);
 });
 
+test('bestPhone: avoids a DNC-flagged number when a callable one exists', () => {
+  // A clean landline beats a DNC-flagged mobile (calling DNC risks a TCPA fine).
+  assert.equal(
+    bestPhone([
+      { number: '2025550100', type: 'Mobile', dnc: true },
+      { number: '2025550101', type: 'Landline', dnc: false },
+    ]),
+    '2025550101',
+  );
+  // If every number is flagged, fall back to the best of the bad lot (mobile).
+  assert.equal(
+    bestPhone([
+      { number: '2025550101', type: 'Landline', dnc: true },
+      { number: '2025550100', type: 'Mobile', dnc: true },
+    ]),
+    '2025550100',
+  );
+});
+
 test('skipTraceAddress: throws a clear error when no key configured', async () => {
-  // ROCKETSKIP_API_KEY is blanked by test-setup.js, so this must not hit the network.
+  // TRACERFY_API_KEY is blanked by test-setup.js, so this must not hit the network.
   await assert.rejects(
     () => skipTraceAddress({ street: '1 A ST', city: 'Washington', state: 'DC', zip: '20001' }),
-    /not set up|ROCKETSKIP_API_KEY/,
+    /not set up|TRACERFY_API_KEY/,
   );
 });

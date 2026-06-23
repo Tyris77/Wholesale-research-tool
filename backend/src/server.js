@@ -740,8 +740,8 @@ app.get('/api/property-intel/diag', asyncHandler(async (req, res) => {
   res.json(report);
 }));
 
-// Skip trace a lead's owner: look up phone/email via RocketSkip, store on the
-// lead (and its promoted seller, if any). Costs ~$0.07 per match.
+// Skip trace a lead's owner: look up phone/email via Tracerfy, store on the
+// lead (and its promoted seller, if any). Costs ~$0.10 per match, $0 on a miss.
 app.post('/api/property-leads/:parcelId/skip-trace', asyncHandler(async (req, res) => {
   const lead = await dbGet('SELECT * FROM property_leads WHERE parcel_id = ?', [req.params.parcelId]);
   if (!lead) return res.status(404).json({ success: false, error: 'Lead not found' });

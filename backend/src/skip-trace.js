@@ -1,6 +1,7 @@
 import { config, isConfigured } from './config.js';
 
-const SKIP_TRACE_URL = 'https://api.rocketskip.com/api/v1/property/skiptrace';
+// Tracerfy synchronous "instant lookup": one address in, owner contacts out.
+const SKIP_TRACE_URL = 'https://tracerfy.com/v1/api/trace/lookup/';
 
 // Split a DC ITSPE property address ("732 51ST ST NE WASHINGTON DC 20019")
 // into the parts a skip-trace API wants. All leads are in DC, so city/state are fixed.
@@ -17,9 +18,10 @@ export function parseDcAddress(premiseAddr) {
 
 const digitsOf = (s) => String(s).replace(/\D/g, '');
 
-// Defensively pull phones and emails out of a RocketSkip response regardless of
+// Defensively pull phones and emails out of a skip-trace response regardless of
 // the exact nesting: collect from any object with a number-like field and any
-// email-keyed value, de-duplicated. Logs nothing; pure.
+// email-keyed value, de-duplicated. Preserves Tracerfy's `dnc` (do-not-call)
+// flag so callers can avoid numbers that risk a TCPA violation. Logs nothing; pure.
 export function extractContacts(data) {
   const phones = [];
   const emails = [];
@@ -36,7 +38,11 @@ export function extractContacts(data) {
       const d = digitsOf(node[numKey]).slice(-10);
       if (!seenP.has(d)) {
         seenP.add(d);
-        phones.push({ number: d, type: String(node.type ?? node.phoneType ?? '').trim() });
+        phones.push({
+          number: d,
+          type: String(node.type ?? node.phoneType ?? '').trim(),
+          dnc: node.dnc === true,
+        });
       }
     }
     for (const [k, v] of Object.entries(node)) {
@@ -52,28 +58,33 @@ export function extractContacts(data) {
   return { phones, emails };
 }
 
-// Prefer a mobile/cell number (textable) over a landline.
+// Pick the best number to actually dial: prefer a callable (non-DNC) mobile,
+// then any callable number, and only fall back to a DNC-flagged number if every
+// number is flagged. Calling a DNC number without consent risks TCPA penalties.
 export function bestPhone(phones) {
   if (!phones || phones.length === 0) return null;
-  const mobile = phones.find((p) => /mobile|cell|wireless/i.test(p.type));
-  return (mobile ?? phones[0]).number;
+  const isMobile = (p) => /mobile|cell|wireless/i.test(p.type);
+  const callable = phones.filter((p) => !p.dnc);
+  const pick = callable.find(isMobile) ?? callable[0] ?? phones.find(isMobile) ?? phones[0];
+  return pick.number;
 }
 
 export async function skipTraceAddress(addr) {
-  if (!isConfigured(config.keys.rocketskip)) {
-    throw new Error('Skip tracing is not set up. Add your RocketSkip API key (ROCKETSKIP_API_KEY) in Railway → Variables.');
+  if (!isConfigured(config.keys.tracerfy)) {
+    throw new Error('Skip tracing is not set up. Add your Tracerfy API key (TRACERFY_API_KEY) in Railway → Variables.');
   }
   const body = {
-    street_address: addr.street,
+    address: addr.street,
     city: addr.city,
     state: addr.state,
-    zip_code: addr.zip,
+    zip: addr.zip,
+    find_owner: true,
   };
   const res = await fetch(SKIP_TRACE_URL, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${config.keys.rocketskip}`,
+      Authorization: `Bearer ${config.keys.tracerfy}`,
     },
     body: JSON.stringify(body),
   });
@@ -81,9 +92,9 @@ export async function skipTraceAddress(addr) {
   let data;
   try { data = JSON.parse(text); } catch { data = {}; }
   if (!res.ok) {
-    throw new Error(`RocketSkip error ${res.status}: ${text.slice(0, 200)}`);
+    throw new Error(`Tracerfy error ${res.status}: ${text.slice(0, 200)}`);
   }
   // First-call breadcrumb so we can confirm the live response shape if needed.
-  console.log('rocketskip skip-trace top-level keys:', JSON.stringify(Object.keys(data)));
+  console.log('tracerfy skip-trace top-level keys:', JSON.stringify(Object.keys(data)));
   return extractContacts(data);
 }

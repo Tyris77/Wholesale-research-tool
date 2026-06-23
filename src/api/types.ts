@@ -115,7 +115,7 @@ export interface GeocodeResult {
 
 export interface Health {
   status: string;
-  integrations: { groq: boolean; fred: boolean; census: boolean; rentcast: boolean; resend: boolean; rocketskip: boolean };
+  integrations: { groq: boolean; fred: boolean; census: boolean; rentcast: boolean; resend: boolean; tracerfy: boolean };
 }
 
 export interface Activity {

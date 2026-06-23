@@ -16,7 +16,7 @@ test('integrationStatus reports a boolean per integration', () => {
     census: 'your_census_key_here',
     rentcast: 'rc_real',
     resend: 're_real',
-    rocketskip: '',
+    tracerfy: '',
   });
-  assert.deepEqual(status, { groq: true, fred: false, census: false, rentcast: true, resend: true, rocketskip: false });
+  assert.deepEqual(status, { groq: true, fred: false, census: false, rentcast: true, resend: true, tracerfy: false });
 });
