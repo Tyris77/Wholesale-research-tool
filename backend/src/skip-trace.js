@@ -92,7 +92,10 @@ export async function skipTraceAddress(addr) {
   let data;
   try { data = JSON.parse(text); } catch { data = {}; }
   if (!res.ok) {
-    throw new Error(`Tracerfy error ${res.status}: ${text.slice(0, 200)}`);
+    // Tracerfy returns a clean `{ "error": "..." }` body (e.g. 402 "Insufficient
+    // credits..."). Surface that message directly; fall back to the raw body.
+    const msg = typeof data?.error === 'string' ? data.error : text.slice(0, 200);
+    throw new Error(`Tracerfy error ${res.status}: ${msg}`);
   }
   // First-call breadcrumb so we can confirm the live response shape if needed.
   console.log('tracerfy skip-trace top-level keys:', JSON.stringify(Object.keys(data)));
