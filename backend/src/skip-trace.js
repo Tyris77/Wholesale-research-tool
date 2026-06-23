@@ -1,9 +1,9 @@
 import { config, isConfigured } from './config.js';
 
-const SKIP_TRACE_URL = 'https://api.batchdata.com/api/v1/property/skip-trace';
+const SKIP_TRACE_URL = 'https://api.rocketskip.com/api/v1/property/skiptrace';
 
 // Split a DC ITSPE property address ("732 51ST ST NE WASHINGTON DC 20019")
-// into the parts BatchData wants. All leads are in DC, so city/state are fixed.
+// into the parts a skip-trace API wants. All leads are in DC, so city/state are fixed.
 export function parseDcAddress(premiseAddr) {
   const s = String(premiseAddr ?? '').trim();
   const zipMatch = s.match(/\b(\d{5})(?:-\d{4})?\s*$/);
@@ -17,7 +17,7 @@ export function parseDcAddress(premiseAddr) {
 
 const digitsOf = (s) => String(s).replace(/\D/g, '');
 
-// Defensively pull phones and emails out of a BatchData response regardless of
+// Defensively pull phones and emails out of a RocketSkip response regardless of
 // the exact nesting: collect from any object with a number-like field and any
 // email-keyed value, de-duplicated. Logs nothing; pure.
 export function extractContacts(data) {
@@ -60,21 +60,20 @@ export function bestPhone(phones) {
 }
 
 export async function skipTraceAddress(addr) {
-  if (!isConfigured(config.keys.batchdata)) {
-    throw new Error('Skip tracing is not set up. Add your BatchData API key (BATCHDATA_API_KEY) in Railway → Variables.');
+  if (!isConfigured(config.keys.rocketskip)) {
+    throw new Error('Skip tracing is not set up. Add your RocketSkip API key (ROCKETSKIP_API_KEY) in Railway → Variables.');
   }
   const body = {
-    requests: [{
-      propertyAddress: {
-        street: addr.street, city: addr.city, state: addr.state, zip: addr.zip,
-      },
-    }],
+    street_address: addr.street,
+    city: addr.city,
+    state: addr.state,
+    zip_code: addr.zip,
   };
   const res = await fetch(SKIP_TRACE_URL, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${config.keys.batchdata}`,
+      Authorization: `Bearer ${config.keys.rocketskip}`,
     },
     body: JSON.stringify(body),
   });
@@ -82,9 +81,9 @@ export async function skipTraceAddress(addr) {
   let data;
   try { data = JSON.parse(text); } catch { data = {}; }
   if (!res.ok) {
-    throw new Error(`BatchData error ${res.status}: ${text.slice(0, 200)}`);
+    throw new Error(`RocketSkip error ${res.status}: ${text.slice(0, 200)}`);
   }
   // First-call breadcrumb so we can confirm the live response shape if needed.
-  console.log('batchdata skip-trace top-level keys:', JSON.stringify(Object.keys(data)));
+  console.log('rocketskip skip-trace top-level keys:', JSON.stringify(Object.keys(data)));
   return extractContacts(data);
 }

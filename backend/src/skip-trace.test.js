@@ -51,9 +51,9 @@ test('bestPhone: prefers mobile over landline', () => {
 });
 
 test('skipTraceAddress: throws a clear error when no key configured', async () => {
-  // BATCHDATA_API_KEY is blanked by test-setup.js, so this must not hit the network.
+  // ROCKETSKIP_API_KEY is blanked by test-setup.js, so this must not hit the network.
   await assert.rejects(
     () => skipTraceAddress({ street: '1 A ST', city: 'Washington', state: 'DC', zip: '20001' }),
-    /not set up|BATCHDATA_API_KEY/,
+    /not set up|ROCKETSKIP_API_KEY/,
   );
 });
