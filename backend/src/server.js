@@ -34,6 +34,7 @@ import {
 } from './schemas.js';
 import { runPropertyIntelScan, diagnoseScan } from './property-intel.js';
 import { findCashBuyers } from './cash-buyers.js';
+import { runSellerOutreach } from './seller-outreach.js';
 import { parseDcAddress, parseMailingAddress, skipTraceAddress, bestPhone } from './skip-trace.js';
 
 const app = express();
@@ -530,6 +531,10 @@ async function runScheduler() {
     }
   }
 
+  // Seller Outreach Agent: enroll new sellers, send due emails, queue calls/texts.
+  // DB-only and idempotent, so it's safe to run on every tick.
+  const outreach = await runSellerOutreach(now.toISOString());
+
   // Refresh the cash-buyer list weekly (Mondays at 9am UTC).
   if (now.getUTCDay() === 1 && hour === 9) {
     const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
@@ -539,8 +544,58 @@ async function runScheduler() {
     }
   }
 
-  return { stepsProcessed, digestSent };
+  return { stepsProcessed, digestSent, outreach };
 }
+
+// ========== SELLER OUTREACH AGENT ==========
+
+// Manually trigger an outreach run (enroll new sellers, send due emails, queue calls).
+app.post('/api/outreach/run', asyncHandler(async (req, res) => {
+  const summary = await runSellerOutreach(new Date().toISOString());
+  res.json({ success: true, ...summary });
+}));
+
+// Today's action queue: manual touches (call/text/mail) the agent has teed up,
+// joined with the seller's phone/email so the user can act in one place.
+app.get('/api/outreach/queue', asyncHandler(async (req, res) => {
+  const rows = await dbAll(
+    `SELECT t.id, t.seller_id, t.contact_name, t.channel, t.kind, t.scheduled_at, t.subject, t.body,
+            s.phone, s.email, s.property_address, s.status AS seller_status
+       FROM outreach_touches t
+       JOIN sellers s ON s.id = t.seller_id
+      WHERE t.status = 'queued'
+      ORDER BY t.scheduled_at ASC
+      LIMIT 200`,
+  );
+  res.json(rows);
+}));
+
+// Mark a queued touch done (you made the call / sent the text).
+app.post('/api/outreach/touches/:id/complete', asyncHandler(async (req, res) => {
+  const touch = await dbGet('SELECT * FROM outreach_touches WHERE id = ?', [req.params.id]);
+  if (!touch) return res.status(404).json({ success: false, error: 'Touch not found' });
+  const now = new Date().toISOString();
+  await dbRun("UPDATE outreach_touches SET status = 'done' WHERE id = ?", [req.params.id]);
+  await dbRun('UPDATE sellers SET last_contacted = ? WHERE id = ?', [now, touch.seller_id]);
+  await dbRun(
+    `INSERT INTO activities (id, deal_id, contact_type, contact_id, contact_name, channel, subject, status, detail, created_at)
+     VALUES (?, NULL, 'owner', ?, ?, ?, ?, 'done', '', ?)`,
+    [uuid(), touch.seller_id, touch.contact_name, touch.channel, touch.subject || `${touch.channel} ${touch.kind}`, now],
+  );
+  res.json({ success: true });
+}));
+
+// Mark that the seller responded — flags them hot and stops further auto-touches.
+app.post('/api/outreach/touches/:id/reply', asyncHandler(async (req, res) => {
+  const touch = await dbGet('SELECT * FROM outreach_touches WHERE id = ?', [req.params.id]);
+  if (!touch) return res.status(404).json({ success: false, error: 'Touch not found' });
+  const now = new Date().toISOString();
+  await dbRun("UPDATE outreach_touches SET status = 'replied' WHERE id = ?", [req.params.id]);
+  // Pause the rest of the sequence; a live conversation takes over from here.
+  await dbRun("UPDATE outreach_touches SET status = 'skipped' WHERE seller_id = ? AND status IN ('scheduled','queued')", [touch.seller_id]);
+  await dbRun("UPDATE sellers SET status = 'responded', last_contacted = ? WHERE id = ?", [now, touch.seller_id]);
+  res.json({ success: true });
+}));
 
 app.post('/api/scheduler/run', asyncHandler(async (req, res) => {
   const result = await runScheduler();

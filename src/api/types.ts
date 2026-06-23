@@ -301,6 +301,30 @@ export interface PropertyLead {
   }>;
 }
 
+export interface OutreachTouch {
+  id: string;
+  seller_id: string;
+  contact_name: string;
+  channel: 'call' | 'text' | 'mail' | 'email';
+  kind: string;
+  scheduled_at: string;
+  subject: string | null;
+  body: string | null;
+  phone: string | null;
+  email: string | null;
+  property_address: string | null;
+  seller_status: string;
+}
+
+export interface OutreachRunSummary {
+  success: boolean;
+  enrolled: number;
+  emailsSent: number;
+  queued: number;
+  skipped: number;
+  errors: string[];
+}
+
 export interface CashBuyer {
   id: string;
   name: string;

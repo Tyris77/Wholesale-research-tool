@@ -12,6 +12,13 @@ export const config = {
   nodeEnv: process.env.NODE_ENV || 'development',
   emailFrom: process.env.EMAIL_FROM || '',
   notifyEmail: process.env.NOTIFY_EMAIL || '',
+  // Sender identity used in automated seller outreach (email footer is CAN-SPAM:
+  // physical address + opt-out). Placeholders until set in Railway → Variables.
+  outreach: {
+    name: process.env.OUTREACH_NAME || 'Tyris Walker',
+    phone: process.env.OUTREACH_PHONE || '[YOUR PHONE]',
+    mailingAddress: process.env.OUTREACH_ADDRESS || '[YOUR MAILING ADDRESS], Washington, DC',
+  },
   keys: {
     groq: process.env.GROQ_API_KEY || '',
     fred: process.env.FRED_API_KEY || '',

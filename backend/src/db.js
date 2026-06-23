@@ -268,6 +268,21 @@ export function initDb() {
       last_seen_at TEXT NOT NULL,
       created_at TEXT NOT NULL
     )`);
+
+    db.run(`CREATE TABLE IF NOT EXISTS outreach_touches (
+      id TEXT PRIMARY KEY,
+      seller_id TEXT NOT NULL,
+      contact_name TEXT,
+      channel TEXT NOT NULL,
+      kind TEXT NOT NULL,
+      scheduled_at TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'scheduled',
+      subject TEXT,
+      body TEXT,
+      created_at TEXT NOT NULL
+    )`);
+    db.run('CREATE INDEX IF NOT EXISTS idx_outreach_status ON outreach_touches (status, scheduled_at)');
+    db.run('CREATE INDEX IF NOT EXISTS idx_outreach_seller ON outreach_touches (seller_id)');
   });
 }
 

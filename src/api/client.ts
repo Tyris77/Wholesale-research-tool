@@ -5,6 +5,7 @@ import type {
   DealInputFields, Deal, ArvEstimate, DealMatches, Insights,
   Activity, OutreachResult, Campaign, CampaignStats, AssistantMessage, AssistantReply,
   PublicDeal, InquiryBody, DealLinkResult, PropertyLead, CashBuyer,
+  OutreachTouch, OutreachRunSummary,
 } from './types';
 
 const DEFAULT_BASE_URL = (import.meta.env.VITE_API_URL as string | undefined) ?? '';
@@ -180,4 +181,20 @@ export async function skipTraceLead(
   parcelId: string,
 ): Promise<{ success: boolean; phone: string | null; email: string | null }> {
   return apiFetch(`/api/property-leads/${encodeURIComponent(parcelId)}/skip-trace`, { method: 'POST' });
+}
+
+export async function runOutreach(): Promise<OutreachRunSummary> {
+  return apiFetch('/api/outreach/run', { method: 'POST' });
+}
+
+export async function getOutreachQueue(): Promise<OutreachTouch[]> {
+  return apiFetch<OutreachTouch[]>('/api/outreach/queue');
+}
+
+export async function completeOutreachTouch(id: string): Promise<{ success: boolean }> {
+  return apiFetch(`/api/outreach/touches/${encodeURIComponent(id)}/complete`, { method: 'POST' });
+}
+
+export async function replyOutreachTouch(id: string): Promise<{ success: boolean }> {
+  return apiFetch(`/api/outreach/touches/${encodeURIComponent(id)}/reply`, { method: 'POST' });
 }
